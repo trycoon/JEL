@@ -36,7 +36,7 @@ Have a bug or a feature request? [Please open a new issue](https://github.com/tr
 
 ## Contributing
 
-All HTML and CSS should conform to the [Code Guide](http://github.com/mdo/code-guide), maintained by [Mark Otto](http://github.com/mdo).
+All HTML and CSS should conform to the [BootStrap Code Guide](http://github.com/mdo/code-guide), maintained by [Mark Otto](http://github.com/mdo).
 
 Thanks!
 
@@ -46,9 +46,10 @@ Thanks!
 
 **Henrik Östman**
 
-+ http://twitter.com/mdo
++ http://twitter.com/trycoon
 + http://github.com/trycoon
 
 
 ## Copyright and license
 
+[Yet to be decided]
