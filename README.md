@@ -1,6 +1,6 @@
-# [JEL v0.1.0](http://github.com/trycoon/JEL)
+# Welcome to [JEL](http://github.com/trycoon/JEL)
 
-Sensor logging, reporting, and a touch of Home Automation.
+<i>Sensor logging, reporting, and a touch of Home Automation.</i>
 
 
 ## Quick start
