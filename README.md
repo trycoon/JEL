@@ -2,6 +2,11 @@
 
 <i>Sensor logging, reporting, and a touch of Home Automation.</i>
 
+JEL provides a server that is capable of collecting samples from a wide range of sensors, store them efficiently, and trigger actions based upon rules defined.
+A bundled web-based client present current sensor readings in realtime and historical readings through graphs and gauges.
+A REST-based API is available for integration with other softwares.
+
+More information is available on the [Wiki](https://github.com/trycoon/JEL/wiki).
 
 ## Quick start
 
