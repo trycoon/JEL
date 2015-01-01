@@ -1,7 +1,18 @@
-# Include your project-specific ignores in this file
-# Read about how to use .gitignore: https://help.github.com/articles/ignoring-files
 .DS_Store
-.idea/*
-npm-debug.log
-/node_modules
+.gradle
+.idea
+.classpath
+.project
+.settings
+.yardoc
+.yardopts
+*.log
+build
+target
+storage
+out
+nbactions.xml
+nb-configuration.xml
+test-results
 *.class
+node_modules
