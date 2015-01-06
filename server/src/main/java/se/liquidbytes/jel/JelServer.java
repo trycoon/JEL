@@ -23,7 +23,7 @@ import io.vertx.core.Vertx;
 import java.lang.invoke.MethodHandles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import se.liquidbytes.jel.storage.OrientDB;
+import se.liquidbytes.jel.database.OrientDB;
 import se.liquidbytes.jel.system.Settings;
 
 /**
