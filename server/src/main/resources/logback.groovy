@@ -28,5 +28,5 @@ appender("FILE", RollingFileAppender) {
     maxFileSize = "2MB"
   }
 }
-logger("se.liquidbytes.jel.JelServer", DEBUG)
+logger("se.liquidbytes.jel", DEBUG)
 root(WARN, ["STDOUT", "FILE"])

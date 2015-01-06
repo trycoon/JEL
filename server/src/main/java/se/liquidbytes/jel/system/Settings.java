@@ -141,23 +141,7 @@ public final class Settings {
             } catch (InvalidPathException ex) {
                 throw new JelException("Storagepath-setting had not a valid path-expression, make sure its correctly set.");
             }
-        }
-
-        if (props.getProperty("dbhost") == null || props.getProperty("dbhost").length() == 0) {
-            throw new JelException("No valid dbhost-setting has been specified, please set the dbhost-path in the jel.properties-file.");
-        }
-
-        if (props.getProperty("dbport") == null || !props.getProperty("dbport").matches("^[0-9]+$")) {
-            throw new JelException("No valid dbport-setting has been specified, please set the dbport-value in the jel.properties-file.");
-        }
-
-        if (props.getProperty("dbuser") == null || props.getProperty("dbuser").length() == 0) {
-            throw new JelException("No valid dbuser-setting has been specified, please set the dbuser-name in the jel.properties-file.");
-        }
-
-        if (props.getProperty("dbpassword") == null || props.getProperty("dbpassword").length() == 0) {
-            throw new JelException("No valid dbpassword-setting has been specified, please set the dbpassword-name in the jel.properties-file.");
-        }
+        }        
 
         if (!new File(storagePath.toString()).exists()) {
             try {
@@ -321,6 +305,10 @@ public final class Settings {
         return (getOSName().toLowerCase().contains("linux"));
     }
 
+    /**
+     * 
+     * @return 
+     */
     public static boolean isRaspberryPi() {
         return (getOSName().toLowerCase().contains("raspberrypi"));
     }
@@ -461,10 +449,18 @@ public final class Settings {
         return Runtime.getRuntime().freeMemory();
     }
 
+    /**
+     * 
+     * @return 
+     */
     public static long getTotalDiskSpace() {
         return new File(getUserHome()).getTotalSpace();
     }
 
+    /**
+     * 
+     * @return 
+     */
     public static long getFreeDiskSpace() {
         return new File(getUserHome()).getUsableSpace();
     }

@@ -16,20 +16,22 @@
  */
 package se.liquidbytes.jel;
 
-import io.vertx.core.AbstractVerticle;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.AsyncResultHandler;
+import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Vertx;
-import io.vertx.core.http.HttpServerOptions;
 import java.lang.invoke.MethodHandles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import se.liquidbytes.jel.storage.OrientDB;
 import se.liquidbytes.jel.system.Settings;
 
 /**
  *
  * @author Henrik Östman
  */
-public class JelServer extends AbstractVerticle {
-    
+public class JelServer {
+
     private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     /**
@@ -38,57 +40,73 @@ public class JelServer extends AbstractVerticle {
      * @param args
      */
     public static void main(String[] args) {
-        
-        logger.info("Starting JEL-server");
-        
-        try {
-            Settings.init(args);
-            
-            Vertx vertx = Vertx.vertx();
-            vertx.deployVerticle(new JelServer());
-            
-        } catch (Throwable ex) {
-            logger.error("General error caught during server deployment, application is shutting down. Message: {}.", ex.getMessage(), ex.getCause());
-            System.exit(1);
-        }
-        
-    }
 
-    /**
-     *
-     */
-    @Override
-    public void start() {
-        
-        logger.info(Settings.getInformationString());
-        
+        logger.info("Starting JEL-server");
+
+        /*Runtime.getRuntime().addShutdownHook(new Thread() {
+         @Override
+         public void run() {
+         // Do stuff.
+         }
+         });*/
         try {
-            
+
+            // Load settings and parse arguments
+            Settings.init(args);
+
+            logger.info(Settings.getInformationString());
+
             startServer();
-            
+
         } catch (Throwable ex) {
             logger.error("General error caught during server-startup, application is shutting down. Message: {}.", ex.getMessage(), ex.getCause());
             System.exit(1);
         }
+
     }
 
     /**
-     *
+     * Startup application verticles
      */
-    /*@Override
-     public void stop() {
+    private static void startServer() {
 
-     }*/
+        Vertx vertx = Vertx.vertx();
 
-    /*  Runtime.getRuntime().addShutdownHook(new Thread() {
-     public void run() {
-     try { LogService.this.stop(); }
-     catch (InterruptedException ignored) {}
-     }
-     });*/
-    private void startServer() {
-        vertx.createHttpServer(new HttpServerOptions().setPort(8080)).requestHandler(req -> req.response().end("Hello World!")).listen();
-        
-        logger.info("JEL-server is up and running on port {}", Settings.get("port"));        
+        // Startup database-system as own worker-verticle.
+        DeploymentOptions deployOptions = new DeploymentOptions();
+        deployOptions.setInstances(1);
+        deployOptions.setWorker(true);
+        vertx.deployVerticle(new OrientDB(), deployOptions, (AsyncResultHandler<String>) (AsyncResult<String> event) -> {
+            if (event.failed()) {
+                throw new JelException("Failed to deploy database-verticle.", event.cause());
+            }
+
+            if (event.succeeded()) {
+                // Startup verticle handling HTTP-requests for static and dynamic HTML.
+                vertx.deployVerticle(new RequestRouter(), (AsyncResultHandler<String>) (AsyncResult<String> req_event) -> {
+                    if (req_event.failed()) {
+                        throw new JelException("Failed to deploy request-verticle.", event.cause());
+                    }
+
+                    if (req_event.succeeded()) {
+                        logger.info("JEL-server is up and running on port {}", Settings.get("port"));
+                    }
+                });
+
+            }
+        });
+
     }
 }
+
+
+// APEX-feedback:
+// 
+/*
+vertx.deployVerticle(new RequestVerticle(), (AsyncResultHandler<String>) (AsyncResult<String> req_event) -> {
+                    if (req_event.failed()) {
+                        throw new JelException("Failed to deploy request-verticle.", event.cause());
+                    }
+
+
+*/
