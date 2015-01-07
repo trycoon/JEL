@@ -17,8 +17,14 @@
 package se.liquidbytes.jel;
 
 import io.vertx.core.AbstractVerticle;
+import static io.vertx.core.http.HttpMethod.GET;
+import static io.vertx.core.http.HttpMethod.POST;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.apex.addons.HandlebarsTemplateEngine;
+import io.vertx.ext.apex.addons.TemplateHandler;
+import io.vertx.ext.apex.core.BodyHandler;
 import io.vertx.ext.apex.core.Router;
 import java.lang.invoke.MethodHandles;
 import org.slf4j.Logger;
@@ -55,26 +61,27 @@ public class RequestRouter extends AbstractVerticle {
         //router.route("/static").handler(StaticServer.staticServer("static"));
 
         // Paths starting with `/dynamic` return pages generated from handlebars templates 
-        //router.route("/dynamic").handler(HandlebarsTemplateEngine.create());
+        router.route("/dynamic").handler(TemplateHandler.templateHandler(HandlebarsTemplateEngine.create()));
+
         // Create a sub router for our REST API
         Router apiRouter = Router.router(vertx);
         
         // We need body parsing
-        //apiRouter.route(BodyHandler.bodyHandler());
-        /*apiRouter.route("/sites")
+        apiRouter.route().handler(BodyHandler.bodyHandler());
+        apiRouter.route("/sites")
                 .method(POST)
                 .consumes("application/json")
                 .handler(context -> {
                     JsonObject site = context.getBodyAsJson();
                     // .... store the site
                     context.response().end(); // Send back 200-OK
-                });*/
-        /*apiRouter.route("/sites")
+                });
+        apiRouter.route("/sites")
                 .method(GET)
                 .produces("application/json")
                 .handler(context -> {
                     context.response().end("{[{site: {id: 123, name: \"hepp\"}]}"); // Send back 200-OK
-                });*/
+                });
         // ... more API 
         // attach the sub router to the main router at the mount point "/api"
         router.mountSubRouter("/api", apiRouter);
