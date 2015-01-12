@@ -123,6 +123,13 @@
             <groupId>com.pi4j</groupId>
             <artifactId>pi4j-core</artifactId>
             <version>0.0.5</version>
+            <exclusions>
+                <!-- http://ulrichbuschbaum.wordpress.com/2014/11/18/building-an-executable-pi4j-jar/ -->
+                <exclusion>
+                    <groupId>com.pi4j</groupId>
+                    <artifactId>pi4j-native</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
 </project>
