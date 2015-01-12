@@ -1,0 +1,19 @@
+This directory holds the installed plugins for JEL.
+
+Each one is contained in a separate directory having the unique id of the plugin
+as name and must host a plugin.xml-file describing the plugin. Beside the plugin.xml-file
+all files for the specific plugin is places in here and an entry in the plugin.xml-file points
+out which file is used for starting up the plugin.
+
+An example illustration:
+
+plugins/
+  adapter.1wire/
+    plugin.xml
+    ..other related files..
+  adapter.zwave/
+    plugin.xml
+    ..other related files..
+  exporter.facebook/
+    plugin.xml
+    ..other related files..

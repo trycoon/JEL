@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.database.OrientDB;
 import se.liquidbytes.jel.system.Settings;
+import se.liquidbytes.jel.system.SystemInfo;
 
 /**
  *
@@ -54,7 +55,7 @@ public class JelServer {
             // Load settings and parse arguments
             Settings.init(args);
 
-            logger.info(Settings.getInformationString());
+            logger.info(SystemInfo.getStartupInformation());
 
             startServer();
 
@@ -71,7 +72,12 @@ public class JelServer {
     private static void startServer() {
 
         Vertx vertx = Vertx.vertx();
-
+//
+// Read this "Asynchronous Verticle start and stop": https://vertx.ci.cloudbees.com/view/vert.x-3/job/vert.x3-website/ws/target/site/vertx-core/index.html#_asynchronous_verticle_start_and_stop
+//
+        //
+        // Shut down vert.x with "Causing Vert.x to exit": https://vertx.ci.cloudbees.com/view/vert.x-3/job/vert.x3-website/ws/target/site/vertx-core/index.html#_causing_vert_x_to_exit
+        //
         // Startup database-system as own worker-verticle.
         DeploymentOptions deployOptions = new DeploymentOptions();
         deployOptions.setInstances(1);
@@ -83,15 +89,14 @@ public class JelServer {
 
             if (event.succeeded()) {
                 // Startup verticle handling HTTP-requests for static and dynamic HTML.
-                vertx.deployVerticle(new RequestRouter(), (AsyncResultHandler<String>) (AsyncResult<String> req_event) -> {
-                    if (req_event.failed()) {
+                /*vertx.deployVerticle(new RequestRouter(), (AsyncResultHandler<String>) (AsyncResult<String> req_event) -> {                    if (req_event.failed()) {
                         throw new JelException("Failed to deploy request-verticle.", event.cause());
                     }
 
                     if (req_event.succeeded()) {
                         logger.info("JEL-server is up and running on port {}", Settings.get("port"));
                     }
-                });
+                });*/
 
             }
         });
