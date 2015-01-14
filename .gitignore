@@ -16,3 +16,4 @@ nb-configuration.xml
 test-results
 *.class
 node_modules
+node

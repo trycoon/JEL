@@ -1,7 +1,10 @@
 node_modules
+node
 temp
 dist
+target
 .sass-cache
 .tmp
+*.log
 app/bower_components
 test/bower_components

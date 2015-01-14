@@ -32,6 +32,9 @@ import org.slf4j.LoggerFactory;
  */
 public class OrientDB extends AbstractVerticle {
 
+    //
+    // USE VERTX-SERVICE-PROXY! https://github.com/vert-x3/vertx-service-proxy
+    //
     // https://github.com/orientechnologies/orientdb/wiki/Embedded-Server
     // http://www.orientechnologies.com/docs/2.0/orientdb.wiki/Tutorial-Document-and-graph-model.html
     // http://www.orientechnologies.com/docs/last/orientdb.wiki/SQL-Insert.html

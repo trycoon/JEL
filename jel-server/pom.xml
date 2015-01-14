@@ -4,26 +4,52 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <!--<repositories>
+        <repository>
+            <id>sonatype-nexus-releases</id>
+            <url>https://oss.sonatype.org/content/repositories/releases</url>
+            <layout>default</layout>
+        </repository>
+        <repository>
+            <id>sonatype-nexus-snapshots</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <layout>default</layout>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
+    </repositories>-->
+  
     <groupId>se.liquidbytes</groupId>
     <artifactId>jel-server</artifactId>
     <version>1.0-SNAPSHOT</version>
-
+    <name>JEL - Server</name>
+    
     <parent>
         <groupId>se.liquidbytes</groupId>
-        <artifactId>jel</artifactId>
+        <artifactId>jel-parent</artifactId>
         <version>1.0</version>
     </parent>
 
+    <licenses>
+        <license>
+            <name>The GNU Lesser General Public License, Version 3.0</name>
+            <url>http://www.gnu.org/licenses/lgpl-3.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+  
     <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <vertx.version>3.0.0-dev_preview1</vertx.version>
+        <orientdb.version>2.0-rc1</orientdb.version>
+        <logback.version>1.1.2</logback.version>            
     </properties>
 
-    <build>
-    
+    <build>    
         <plugins>
-            <!-- Fat executable jars
-            If you want your project to output a fat executable standalone jar with all the dependencies in it you
-            can use the shade plugin. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -56,7 +82,7 @@
                                     </excludes>
                                 </filter>
                             </filters>
-                            <outputFile>${project.build.directory}/${project.artifactId}-${project.version}-fat.jar</outputFile>
+                            <outputFile>${project.build.directory}/${project.artifactId}-${project.version}-dist.jar</outputFile>
                         </configuration>
                     </execution>
                 </executions>
@@ -70,23 +96,23 @@
                 </configuration>
             </plugin>
         </plugins>
-
     </build>
+    
     <dependencies>
         <dependency>
             <groupId>com.orientechnologies</groupId>
             <artifactId>orientdb-server</artifactId>
-            <version>2.0-rc1</version>
+            <version>${orientdb.version}</version>
         </dependency>
         <dependency>
             <groupId>com.orientechnologies</groupId>
             <artifactId>orientdb-enterprise</artifactId>
-            <version>2.0-rc1</version>
+            <version>${orientdb.version}</version>
         </dependency>
         <dependency>
             <groupId>com.orientechnologies</groupId>
             <artifactId>orientdb-client</artifactId>
-            <version>2.0-rc1</version>
+            <version>${orientdb.version}</version>
         </dependency>        
         <dependency>
             <groupId>args4j</groupId>
@@ -107,17 +133,27 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.1.2</version>
+            <version>${logback.version}</version>
         </dependency> 
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-core</artifactId>
-            <version>1.1.2</version>
+            <version>${logback.version}</version>
         </dependency>
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-core</artifactId>
-            <version>3.0.0-dev_preview1</version>
+            <version>${vertx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-hazelcast</artifactId>
+            <version>${vertx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-sockjs</artifactId>
+            <version>${vertx.version}</version>
         </dependency>
         <dependency>
             <groupId>com.pi4j</groupId>

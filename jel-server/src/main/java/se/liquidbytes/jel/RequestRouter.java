@@ -44,22 +44,54 @@ public class RequestRouter extends AbstractVerticle {
             router.route().handler(loggerHandler);
         }
 
-        HttpServer server = vertx.createHttpServer(new HttpServerOptions().setPort(Integer.valueOf(Settings.get("port"))).setHost("localhost"));
-        server.requestHandler(router::accept);
+         router.route().handler( Favicon.favicon() );
 
-        // Paths starting with '/dynamic' return pages generated from handlebars templates
-        TemplateEngine engine = HandlebarsTemplateEngine.create("template/", "hbs");
-        router.route("/dynamic").handler(TemplateHandler.templateHandler(engine, "mainpage", "text/x-handlebars-template"));
+         //static files
+         router.routeWithRegex( "/web/*" )
+         .handler( StaticServer.staticServer()
+         .setDirectoryListing( false ) )
+         .failureHandler( ( FailureRoutingContext context ) -> {
+         context.response()
+         .setStatusCode( 404 )
+         .end();
+         } );
 
-        // Paths starting with `/static` serve as static resources (from filesystem or classpath)
-        router.route("/static").handler(StaticServer.staticServer("static/"));
+         // API routes here.
+         router.route( "/api/sites" )
+         .handler( BodyHandler.bodyHandler() );
+         router.route( "/api/sites" )
+         .handler( ctx -> {
+         String body = ctx.getBodyAsString();
+         ctx.response()
+         .end( body );
+         } );
+         for ( HttpMethod method : HttpMethod.values() ) {
+         router.route( "/api/sites" )
+         .method( method );
+         }
 
-        // Create a sub router for our REST API
-        Router apiRouter = Router.router(vertx);
+         //no matcher - MUST be last in routers chain
+         router.route()
+         .handler( ( RoutingContext context ) -> {
+         context.fail( 404 );
+         } );
 
-        // We need body parsing
-        apiRouter.route().handler(BodyHandler.bodyHandler());
-        apiRouter.route("/sites")
+        HttpServer server = vertx.createHttpServer(new HttpServerOptions()
+         .setPort(Integer.valueOf(Settings.get("port")))
+         .setHost("localhost")
+         .setAcceptBacklog(10000))
+         .requestHandler(router::accept)
+         .listen( result -> {
+         if ( result.succeeded() ) {
+
+         } else {
+            fail( result.cause().getMessage() );
+         }
+         });
+
+
+        // Old stuff
+         apiRouter.route("/sites")
                 .method(POST)
                 .consumes("application/json")
                 .handler(context -> {
@@ -73,11 +105,6 @@ public class RequestRouter extends AbstractVerticle {
                 .handler(context -> {
                     context.response().end("{[{site: {id: 123, name: \"hepp\"}]}"); // Send back 200-OK
                 });
-        // ... more API 
-        // attach the sub router to the main router at the mount point "/api"
-        router.mountSubRouter("/api", apiRouter);
-
-        server.listen();
 */
     }
 

@@ -5,18 +5,40 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>se.liquidbytes</groupId>
-    <artifactId>jel</artifactId>
+    <artifactId>jel-parent</artifactId>
     <version>1.0</version>
     <packaging>pom</packaging>
-    <name>JEL</name>  
+    <name>JEL</name>
+    <url>https://github.com/trycoon/JEL.git</url>
+    
+    <developers>
+        <developer>
+            <id>trycoon</id>
+            <name>Henrik Östman</name>
+            <email>trycoon@gmail.com</email>
+        </developer>
+    </developers>
     
     <modules>
         <module>jel-server</module>
         <module>jel-client</module>
     </modules>
 
+    <licenses>
+        <license>
+            <name>The GNU Lesser General Public License, Version 3.0</name>
+            <url>http://www.gnu.org/licenses/lgpl-3.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+            
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+    
     <build>
         <pluginManagement>
+            <!-- Specify target JDK once here, instead of in every childproject. -->
             <plugins>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -25,9 +47,35 @@
                         <source>1.8</source>
                         <target>1.8</target>
                     </configuration>
-                </plugin>
+                </plugin>                
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!--<plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>dist</id>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <appendAssemblyId>false</appendAssemblyId>
+                            <finalName>${project.artifactId}-${project.version}</finalName>
+                            <descriptors>
+                                <descriptor>stack.xml</descriptor>
+                            </descriptors>
+                            <formats>
+                                <format>dir</format>
+                                <format>zip</format>
+                                <format>tar.gz</format>
+                            </formats>
+                        </configuration>
+                        <phase>package</phase>
+                    </execution>
+                </executions>
+            </plugin>-->
+        </plugins>
     </build>
 </project>
 
