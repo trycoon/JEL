@@ -31,6 +31,12 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
+    
+    <scm>
+        <url>https://github.com/trycoon/JEL</url>
+        <connection>scm:git:https://github.com/trycoon/JEL.git</connection>
+        <developerConnection>scm:git:https://github.com/trycoon/JEL.git</developerConnection>
+    </scm>
             
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
