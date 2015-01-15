@@ -5,8 +5,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>se.liquidbytes</groupId>
-    <artifactId>jel-parent</artifactId>
-    <version>1.0</version>
+    <artifactId>jel</artifactId>
+    <version>1.0.0</version>
     <packaging>pom</packaging>
     <name>JEL</name>
     <url>https://github.com/trycoon/JEL.git</url>
@@ -57,11 +57,12 @@
             </plugins>
         </pluginManagement>
         <plugins>
-            <!--<plugin>
+            <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
+                <inherited>false</inherited> <!-- The childprojects should not run this! -->
                 <executions>
                     <execution>
-                        <id>dist</id>
+                        <id>dist-compress</id>
                         <goals>
                             <goal>single</goal>
                         </goals>
@@ -69,18 +70,13 @@
                             <appendAssemblyId>false</appendAssemblyId>
                             <finalName>${project.artifactId}-${project.version}</finalName>
                             <descriptors>
-                                <descriptor>stack.xml</descriptor>
+                                <descriptor>compress-descriptor.xml</descriptor>
                             </descriptors>
-                            <formats>
-                                <format>dir</format>
-                                <format>zip</format>
-                                <format>tar.gz</format>
-                            </formats>
                         </configuration>
                         <phase>package</phase>
                     </execution>
                 </executions>
-            </plugin>-->
+            </plugin>
         </plugins>
     </build>
 </project>

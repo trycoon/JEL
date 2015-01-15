@@ -6,14 +6,14 @@
 
     <groupId>se.liquidbytes</groupId>
     <artifactId>jel-client</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>JEL - Client</name>
     <packaging>pom</packaging>
 
     <parent>
         <groupId>se.liquidbytes</groupId>
-        <artifactId>jel-parent</artifactId>
-        <version>1.0</version>
+        <artifactId>jel</artifactId>
+        <version>1.0.0</version>
     </parent>
 
     <licenses>
