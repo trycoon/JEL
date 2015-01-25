@@ -17,31 +17,38 @@
 package se.liquidbytes.jel.database;
 
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
-import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.server.OServer;
 import com.orientechnologies.orient.server.OServerMain;
 import io.vertx.core.AbstractVerticle;
-import java.io.IOException;
+import io.vertx.serviceproxy.ProxyHelper;
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.InvocationTargetException;
 import org.slf4j.LoggerFactory;
 
 /**
  *
  * @author Henrik Östman
  */
-public class OrientDB extends AbstractVerticle {
+public final class DatabaseVerticle extends AbstractVerticle {
 
-    //
-    // USE VERTX-SERVICE-PROXY! https://github.com/vert-x3/vertx-service-proxy
-    //
     // https://github.com/orientechnologies/orientdb/wiki/Embedded-Server
     // http://www.orientechnologies.com/docs/2.0/orientdb.wiki/Tutorial-Document-and-graph-model.html
     // http://www.orientechnologies.com/docs/last/orientdb.wiki/SQL-Insert.html
+    // https://github.com/orientechnologies/orientdb/wiki/Document-Database#asynchronous-query
     // http://www.orientechnologies.com/docs/last/orientdb.wiki/Time-series-use-case.html
     private final static org.slf4j.Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private OServer server;
+    private ODatabaseDocumentTx db;
 
+    /**
+     * Default constructor.
+     */
+    public DatabaseVerticle() {
+        // Nothing
+    }
+
+    /**
+     *
+     */
     @Override
     public void start() {
 
@@ -50,31 +57,19 @@ public class OrientDB extends AbstractVerticle {
         // Start embedded OrientDB-server
         try {
             server = OServerMain.create();
+            server.removeShutdownHook();    // Preventing us from stopping. We invoke server.close ourself.
             server.startup(generateConfig());
             server.activate();
-
-        } catch (ClassNotFoundException ex) {
-            logger.error("fel", ex);
-        } catch (InstantiationException ex) {
-            logger.error("fel", ex);
-        } catch (IllegalAccessException ex) {
-            logger.error("fel", ex);
         } catch (IllegalArgumentException ex) {
-            logger.error("fel", ex);
-        } catch (SecurityException ex) {
-            logger.error("fel", ex);
-        } catch (InvocationTargetException ex) {
-            logger.error("fel", ex);
-        } catch (NoSuchMethodException ex) {
-            logger.error("fel", ex);
-        } catch (IOException ex) {
-            logger.error("fel", ex);
+            logger.error("Probably syntax error in configuration to database-server.", ex);
+            System.exit(2);
         } catch (Exception ex) {
-            logger.error("fel", ex);
+            logger.error("general error starting database-server.", ex);
+            System.exit(2);
         }
 
-        // Create database in not existing and create an connection.
-        ODatabaseDocumentTx db = new ODatabaseDocumentTx("plocal:./storage/databases/jel");
+        // Create database if not existing and establish a connection.
+        db = new ODatabaseDocumentTx("plocal:./storage/databases/jel");
         if (!db.exists()) {
             db.create();
         } else {
@@ -82,35 +77,47 @@ public class OrientDB extends AbstractVerticle {
             db.open("admin", "admin");
         }
 
-        try {
-            ODocument site = new ODocument("Site");
-            site.field("name", "Gaudi");
-            site.field("location", "Madrid");
-            site.field("city", new ODocument("City").field("name", "Rome").field("country", "Italy"));
-            site.save();
-        } finally {
-            db.close();
-        }
-
-        // Setup eventbus-listener.
-        vertx.eventBus().consumer("storage.handler", message -> {
-            logger.info("Msg: " + message.body());
-        });
-
-        // Send a test-message.
-        vertx.eventBus().send("storage.handler", "hello");
+        // Setup Vertx-service-proxy that acts as the API-router for the database against the rest of the application.
+        Database database = Database.create(vertx, db);
+        ProxyHelper.registerService(Database.class, vertx, database, "jel.database");
 
         logger.info("Database up and running");
+
+        // TEST, remove later
+        Database proxy = Database.createProxy(vertx, "jel.database");
+        proxy.site(res -> {
+            if (res.succeeded()) {
+                res.result().getSite("123", res2 -> {
+                    if (res2.succeeded()) {
+                        logger.info("got something " + res2.result());
+                    }
+                });
+            }
+        });
     }
 
+    /**
+     *
+     */
     @Override
     public void stop() {
         if (server != null) {
+            logger.info("Shuting down databaseserver.");
+
+            if (db != null) {
+                db.close();
+                db = null;
+            }
+
             server.shutdown();
             server = null;
         }
     }
 
+    /**
+     *
+     * @return
+     */
     private String generateConfig() {
 
         StringBuilder builder = new StringBuilder();
@@ -132,12 +139,12 @@ public class OrientDB extends AbstractVerticle {
                 .append("  <properties>")
                 .append("    <entry name=\"log.console.level\" value=\"info\"/>")
                 .append("    <entry name=\"log.file.level\" value=\"fine\"/>")
-                //.append("    <entry name=\"server.database.path\" value=\"./storage/database\"/>")
-                //The following is required to eliminate an error or warning "Error on resolving property: ORIENTDB_HOME"
+                //The following is required to eliminate an error or warning, "Error on resolving property: ORIENTDB_HOME"
                 .append("    <entry name=\"plugin.dynamic\" value=\"false\"/>")
                 .append("  </properties>")
                 .append("</orient-server>");
 
         return builder.toString();
     }
+
 }

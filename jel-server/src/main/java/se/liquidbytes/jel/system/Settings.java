@@ -20,7 +20,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandles;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -47,8 +46,8 @@ public final class Settings {
     private static Properties props;
 
     /**
-     * Default constructor. Prevent creating instanses of this class, all access
-     * is made through static methods.
+     * Private default constructor. Prevent creating instanses of this class,
+     * all access is made through static methods.
      */
     private Settings() {
         // Nothing
@@ -93,6 +92,7 @@ public final class Settings {
 
         try {
             URL url = Settings.class.getClassLoader().getResource(SETTINGS_FILE);
+
             inputStream = url.openStream();
             props.load(inputStream);
 
@@ -105,9 +105,9 @@ public final class Settings {
                 props.setProperty("storagepath", cliArguments.storage);
             }
 
-            logger.info("Successfully loaded settings from file {}", url.toURI().getPath());
+            logger.info("Successfully loaded settings from file {}", url.toExternalForm());
 
-        } catch (IOException | URISyntaxException ex) {
+        } catch (IOException ex) {
             throw new JelException(String.format("Failed to read settings from property file '%s', make sure it exists in class-path and are readable. Message: %s.", SETTINGS_FILE, ex.getMessage()), ex.getCause());
         } finally {
             if (inputStream != null) {

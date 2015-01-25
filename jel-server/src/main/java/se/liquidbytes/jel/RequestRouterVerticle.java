@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Henrik Östman
  */
-public class RequestRouter extends AbstractVerticle {
+public class RequestRouterVerticle extends AbstractVerticle {
 
     private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -35,9 +35,9 @@ public class RequestRouter extends AbstractVerticle {
     @Override
     public void start() {
 
-        logger.info("Starting up request-handler");
-
-        /* Router router = Router.router(vertx);
+        logger.info("Starting up request-router");
+        //throw new RuntimeException("Aj");
+                /* Router router = Router.router(vertx);
 
         if (Settings.get("requestlog").equals("true")) {
             io.vertx.ext.apex.addons.Logger loggerHandler = io.vertx.ext.apex.addons.Logger.logger(true, io.vertx.ext.apex.addons.Logger.Format.SHORT);
@@ -104,8 +104,23 @@ public class RequestRouter extends AbstractVerticle {
                 .produces("application/json")
                 .handler(context -> {
                     context.response().end("{[{site: {id: 123, name: \"hepp\"}]}"); // Send back 200-OK
-                });
-*/
+
+         // Service-proxy talking with database:
+         SomeDatabaseService service = SomeDatabaseService.createProxy(vertx, "jel.database");
+
+         // Save some data in the database - this time using the proxy
+         service.save("mycollection", new JsonObject().putString("name", "tim"), res2 -> {
+         if (res2.succeeded()) {
+         // done
+         }
+         });
+         });
+         */
+    }
+
+    @Override
+    public void stop() {
+        logger.info("Shuting down request-router.");
     }
 
     /**

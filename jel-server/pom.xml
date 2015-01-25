@@ -43,8 +43,8 @@
     </licenses>
   
     <properties>
-        <vertx.version>3.0.0-dev_preview1</vertx.version>
-        <orientdb.version>2.0-rc1</orientdb.version>
+        <vertx.version>3.0.0-milestone2</vertx.version>
+        <orientdb.version>2.0-rc2</orientdb.version>
         <logback.version>1.1.2</logback.version>            
     </properties>
 
@@ -65,12 +65,8 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
                                         <Main-Class>se.liquidbytes.jel.JelServer</Main-Class>
-                                        <!--<Main-Verticle>java:se.liquidbytes.jel.JelServer</Main-Verticle>-->
                                     </manifestEntries>
                                 </transformer>
-                                <!--<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-                                    <resource>META-INF/services/io.vertx.core.spi.VerticleFactory</resource>
-                                </transformer>-->
                             </transformers>
                             <filters>
                                 <filter>
@@ -82,7 +78,6 @@
                                     </excludes>
                                 </filter>
                             </filters>
-                            <outputFile>${project.build.directory}/${project.artifactId}-${project.version}-dist.jar</outputFile>
                         </configuration>
                     </execution>
                 </executions>
@@ -107,11 +102,6 @@
         <dependency>
             <groupId>com.orientechnologies</groupId>
             <artifactId>orientdb-enterprise</artifactId>
-            <version>${orientdb.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.orientechnologies</groupId>
-            <artifactId>orientdb-client</artifactId>
             <version>${orientdb.version}</version>
         </dependency>        
         <dependency>
@@ -153,6 +143,16 @@
         <dependency>
             <groupId>io.vertx</groupId>
             <artifactId>vertx-sockjs</artifactId>
+            <version>${vertx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-service-proxy</artifactId>
+            <version>${vertx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-codegen</artifactId>
             <version>${vertx.version}</version>
         </dependency>
         <dependency>

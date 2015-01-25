@@ -16,14 +16,12 @@
  */
 package se.liquidbytes.jel;
 
-import io.vertx.core.AsyncResult;
-import io.vertx.core.AsyncResultHandler;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Vertx;
 import java.lang.invoke.MethodHandles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import se.liquidbytes.jel.database.OrientDB;
+import se.liquidbytes.jel.database.DatabaseVerticle;
 import se.liquidbytes.jel.system.Settings;
 import se.liquidbytes.jel.system.SystemInfo;
 
@@ -31,9 +29,12 @@ import se.liquidbytes.jel.system.SystemInfo;
  *
  * @author Henrik Östman
  */
-public class JelServer {
+public final class JelServer {
 
     private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static String databaseVerticleReference;
+    private static String requestVerticleReference;
+    private static Vertx vertx;
 
     /**
      * Starting point
@@ -44,19 +45,18 @@ public class JelServer {
 
         logger.info("Starting JEL-server");
 
-        /*Runtime.getRuntime().addShutdownHook(new Thread() {
-         @Override
-         public void run() {
-         // Do stuff.
-         }
-         });*/
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                shutdownServer();
+            }
+        });
+
         try {
 
             // Load settings and parse arguments
             Settings.init(args);
-
             logger.info(SystemInfo.getStartupInformation());
-
             startServer();
 
         } catch (Throwable ex) {
@@ -71,47 +71,75 @@ public class JelServer {
      */
     private static void startServer() {
 
-        Vertx vertx = Vertx.vertx();
-//
-// Read this "Asynchronous Verticle start and stop": https://vertx.ci.cloudbees.com/view/vert.x-3/job/vert.x3-website/ws/target/site/vertx-core/index.html#_asynchronous_verticle_start_and_stop
-//
-        //
-        // Shut down vert.x with "Causing Vert.x to exit": https://vertx.ci.cloudbees.com/view/vert.x-3/job/vert.x3-website/ws/target/site/vertx-core/index.html#_causing_vert_x_to_exit
-        //
+        vertx = Vertx.vertx();
         // Startup database-system as own worker-verticle.
         DeploymentOptions deployOptions = new DeploymentOptions();
         deployOptions.setInstances(1);
         deployOptions.setWorker(true);
-        vertx.deployVerticle(new OrientDB(), deployOptions, (AsyncResultHandler<String>) (AsyncResult<String> event) -> {
-            if (event.failed()) {
-                throw new JelException("Failed to deploy database-verticle.", event.cause());
-            }
+        vertx.deployVerticle(new DatabaseVerticle(), deployOptions, db_res -> {
+            databaseVerticleReference = db_res.result();
 
-            if (event.succeeded()) {
+            if (db_res.succeeded()) {
                 // Startup verticle handling HTTP-requests for static and dynamic HTML.
-                /*vertx.deployVerticle(new RequestRouter(), (AsyncResultHandler<String>) (AsyncResult<String> req_event) -> {                    if (req_event.failed()) {
-                        throw new JelException("Failed to deploy request-verticle.", event.cause());
-                    }
+                vertx.deployVerticle(new RequestRouterVerticle(), req_res -> {
+                    requestVerticleReference = db_res.result();
 
-                    if (req_event.succeeded()) {
+                    if (req_res.succeeded()) {
                         logger.info("JEL-server is up and running on port {}", Settings.get("port"));
+                    } else {
+                        logger.error("Failed to deploy request-verticle.", req_res.cause());
+                        System.exit(2);
                     }
-                });*/
-
+                });
+            } else {
+                logger.error("Failed to deploy database-verticle.", db_res.cause());
+                System.exit(2);
             }
         });
+    }
 
+    /**
+     * Shutdown server, should only be called upon by shutdown-hook. Closes
+     * internal threads and release resources.
+     */
+    private static void shutdownServer() {
+        logger.info("Shuting down JEL-server");
+
+        if (vertx != null) {
+
+            // Undeploy started verticles in order, then shutdown Vertx itself.
+            // We are adding some delays to give the threads time to shut down properly.
+            // The application got a smoother and less error-prone shutdown by doing so.
+            if (requestVerticleReference != null) {
+                logger.debug("Undeploying request-verticle.");
+                vertx.undeployVerticle(requestVerticleReference);
+
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException ex) {
+                    // Ignore
+                }
+            }
+            if (databaseVerticleReference != null) {
+                logger.debug("Undeploying database-verticle.");
+                vertx.undeployVerticle(databaseVerticleReference);
+
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException ex) {
+                    // Ignore
+                }
+            }
+
+            //TODO: Shutdown adapters!
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ex) {
+                // Ignore
+            }
+
+            logger.debug("Closing Vertx.io.");
+            vertx.close();
+        }
     }
 }
-
-
-// APEX-feedback:
-// 
-/*
-vertx.deployVerticle(new RequestVerticle(), (AsyncResultHandler<String>) (AsyncResult<String> req_event) -> {
-                    if (req_event.failed()) {
-                        throw new JelException("Failed to deploy request-verticle.", event.cause());
-                    }
-
-
-*/

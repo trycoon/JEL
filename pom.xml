@@ -21,7 +21,7 @@
     
     <modules>
         <module>jel-server</module>
-        <module>jel-client</module>
+        <!--<module>jel-client</module>-->
     </modules>
 
     <licenses>
@@ -44,7 +44,6 @@
     
     <build>
         <pluginManagement>
-            <!-- Specify target JDK once here, instead of in every childproject. -->
             <plugins>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -58,23 +57,75 @@
         </pluginManagement>
         <plugins>
             <plugin>
-                <artifactId>maven-assembly-plugin</artifactId>
+                <artifactId>maven-dependency-plugin</artifactId>
                 <inherited>false</inherited> <!-- The childprojects should not run this! -->
                 <executions>
                     <execution>
-                        <id>dist-compress</id>
+                        <id>unpack-serverfiles</id>
+                        <phase>package</phase>
                         <goals>
-                            <goal>single</goal>
+                            <goal>unpack</goal>
                         </goals>
                         <configuration>
-                            <appendAssemblyId>false</appendAssemblyId>
-                            <finalName>${project.artifactId}-${project.version}</finalName>
-                            <descriptors>
-                                <descriptor>compress-descriptor.xml</descriptor>
-                            </descriptors>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>${project.groupId}</groupId>
+                                    <artifactId>jel-server</artifactId>
+                                    <version>${project.version}</version>
+                                    <type>jar</type>
+                                    <includes>plugins/**,jel.properties</includes>
+                                </artifactItem>
+                            </artifactItems>
+                            <outputDirectory>${project.build.directory}/dist</outputDirectory>
+                            <overWriteIfNewer>true</overWriteIfNewer>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
                         </configuration>
-                        <phase>package</phase>
                     </execution>
+                    <execution>
+                        <id>copy-server</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>${project.groupId}</groupId>
+                                    <artifactId>jel-server</artifactId>
+                                    <version>${project.version}</version>
+                                    <type>jar</type>
+                                    <destFileName>${project.artifactId}-${project.version}.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                            <outputDirectory>${project.build.directory}/dist</outputDirectory>
+                            <overWriteIfNewer>true</overWriteIfNewer>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>                    
+                    <!--<execution>
+                        <id>copy-client</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>${project.groupId}</groupId>
+                                    <artifactId>jel-client</artifactId>
+                                    <version>${project.version}</version>
+                                    <outputDirectory>${project.build.directory}/dist</outputDirectory>
+                                    <includes>**/*.*</includes>
+                                </artifactItem>
+                            </artifactItems>
+                            <outputDirectory>${project.build.directory}/dist</outputDirectory>
+                            <overWriteIfNewer>true</overWriteIfNewer>
+                            <overWriteReleases>true</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                        </configuration>
+                    </execution>-->
                 </executions>
             </plugin>
         </plugins>

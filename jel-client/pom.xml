@@ -76,6 +76,7 @@
                         </configuration>
                     </execution>
 
+                    <!-- To run a Sass-compiler see: https://github.com/Jasig/sass-maven-plugin, it doesn't require ruby to be installed. -->
                     <!-- TODO: Enable tests when we have them!
                         <execution>
                         <id>javascript tests</id>
