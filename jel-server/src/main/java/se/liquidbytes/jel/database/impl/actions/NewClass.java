@@ -14,69 +14,50 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.
  */
-package se.liquidbytes.jel.database.handlers.impl;
-
-import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
-import com.orientechnologies.orient.core.record.impl.ODocument;
-import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
-import io.vertx.core.AsyncResult;
-import io.vertx.core.Future;
-import io.vertx.core.Handler;
-import io.vertx.core.Vertx;
-import io.vertx.core.json.JsonObject;
-import java.util.Iterator;
-import java.util.List;
-import se.liquidbytes.jel.JelException;
-import se.liquidbytes.jel.database.handlers.Site;
+package se.liquidbytes.jel.database.impl.actions;
 
 /**
  *
  * @author Henrik Östman
  */
-public class SiteImpl implements Site {
-
-    private final Vertx vertx;
-    private final ODatabaseDocumentTx dbDoc;
-
-    /**
-     * Construktor
-     *
-     * @param vertx
-     * @param dbDoc
+public class NewClass {
+    /*
+     ===========================================================================
+     | SITE - implementation
+     ===========================================================================
      */
-    public SiteImpl(Vertx vertx, ODatabaseDocumentTx dbDoc) {
-        this.vertx = vertx;
-        this.dbDoc = dbDoc;
-    }
-
-    @Override
+    /*
+     @Override
     public void getSite(String id, Handler<AsyncResult<String>> resultHandler) {
 
-        try {
-            OSQLSynchQuery<ODocument> query = new OSQLSynchQuery<>("select from Site where id = ?");
-            List<ODocument> list = dbDoc.command(query).execute(id);
+        logger.debug("getSite(id=%s)", id);
+        try {            OSQLSynchQuery<ODocument> query = new OSQLSynchQuery<>("select from Site where id = ?");
+         List<ODocument> list = dbDoc.command(query).execute(id);
 
-            String result = "";
+         String result = "";
 
-            if (!result.isEmpty()) {
-                result = list.get(0).toJSON();
-            }
+         if (!result.isEmpty()) {
+         result = list.get(0).toJSON();
+         }
 
-            resultHandler.handle(Future.succeededFuture(result));
-        } catch (Exception ex) {
-            resultHandler.handle(Future.failedFuture(new JelException("Failed to get site with id=" + id, ex)));
-        }
+         resultHandler.handle(Future.succeededFuture(result));
+         } catch (Exception ex) {
+         resultHandler.handle(Future.failedFuture(new JelException("Failed to get site with id=" + id, ex)));
+         }
+        resultHandler.handle(Future.succeededFuture("test"));
     }
 
     @Override
     public void getSites(Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("getSites()");
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public void addSite(JsonObject document, Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("addSite()");
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-        /* ODocument site = new ODocument("Sites");
+         ODocument site = new ODocument("Sites");
          site.field("name", "My site");
          site.field("description", "");
          site.field("gpsPosition", "");
@@ -84,7 +65,7 @@ public class SiteImpl implements Site {
 
          site.save();
 
-         /*
+         
          Id [string]("1234567890")
          Name [string]("solar1")
          Description [string]("My solar panel sensor")
@@ -158,22 +139,66 @@ public class SiteImpl implements Site {
          Type [string]("text"|"switch"|...)
          Settings
          ]
-         */
+         
     }
 
     @Override
     public void updateSite(JsonObject document, Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("updateSite()");
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public void removeSite(String id, Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("removeSite()");
+        
+         OSQLSynchQuery<ODocument> query = new OSQLSynchQuery<>("select from Site where id = ?");
+         List<ODocument> list = dbDoc.command(query).execute(id);
+         Iterator<ODocument> iter = list.iterator();
+         while (iter.hasNext()) {
+         iter.next().delete();
+         }
+        resultHandler.handle(Future.succeededFuture("test"));
+    }*/
 
-        OSQLSynchQuery<ODocument> query = new OSQLSynchQuery<>("select from Site where id = ?");
-        List<ODocument> list = dbDoc.command(query).execute(id);
-        Iterator<ODocument> iter = list.iterator();
-        while (iter.hasNext()) {
-            iter.next().delete();
-        }
+    /*
+     ===========================================================================
+     | USER - implementation
+     ===========================================================================
+     */
+    /* @Override
+     public void getUser(String id, Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("getUser()");
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
+
+    @Override
+    public void getUserByUsername(String username, Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("getUserByUsername()");
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public void getUsers(Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("getUsers()");
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public void addUser(JsonObject document, Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("addUser()");
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public void updateUser(JsonObject document, Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("updateUser()");
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public void removeUser(String id, Handler<AsyncResult<String>> resultHandler) {
+        logger.debug("removeUser()");
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }*/
 }

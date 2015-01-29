@@ -21,7 +21,7 @@ import io.vertx.core.Vertx;
 import java.lang.invoke.MethodHandles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import se.liquidbytes.jel.database.DatabaseVerticle;
+import se.liquidbytes.jel.database.DatabaseServiceVerticle;
 import se.liquidbytes.jel.system.Settings;
 import se.liquidbytes.jel.system.SystemInfo;
 
@@ -76,7 +76,7 @@ public final class JelServer {
         DeploymentOptions deployOptions = new DeploymentOptions();
         deployOptions.setInstances(1);
         deployOptions.setWorker(true);
-        vertx.deployVerticle(new DatabaseVerticle(), deployOptions, db_res -> {
+        vertx.deployVerticle(new DatabaseServiceVerticle(), deployOptions, db_res -> {
             databaseVerticleReference = db_res.result();
 
             if (db_res.succeeded()) {

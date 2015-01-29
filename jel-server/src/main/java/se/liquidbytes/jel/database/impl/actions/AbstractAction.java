@@ -14,54 +14,50 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library.
  */
-package se.liquidbytes.jel.database;
+package se.liquidbytes.jel.database.impl.actions;
 
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
-import se.liquidbytes.jel.database.handlers.Site;
-import se.liquidbytes.jel.database.handlers.User;
-import se.liquidbytes.jel.database.handlers.impl.SiteImpl;
-import se.liquidbytes.jel.database.handlers.impl.UserImpl;
+import se.liquidbytes.jel.JelException;
 
 /**
  *
  * @author Henrik Östman
+ * @param <T>
  */
-public class DatabaseImpl implements Database {
+public abstract class AbstractAction<T> implements Handler<Future<T>> {
 
-    private final Vertx vertx;
-    private final ODatabaseDocumentTx dbDoc;
+    protected final Vertx vertx;
+    protected final ODatabaseDocumentTx conn;
 
     /**
      * Constructor
      *
      * @param vertx
-     * @param dbDoc
+     * @param conn
      */
-    public DatabaseImpl(Vertx vertx, ODatabaseDocumentTx dbDoc) {
+    protected AbstractAction(Vertx vertx, ODatabaseDocumentTx conn) {
         this.vertx = vertx;
-        this.dbDoc = dbDoc;
+        this.conn = conn;
     }
 
-    /**
-     *
-     * @param resultHandler
-     */
     @Override
-    public void site(Handler<AsyncResult<Site>> resultHandler) {
-        resultHandler.handle(Future.succeededFuture(new SiteImpl(vertx, dbDoc)));
+    public void handle(Future<T> future) {
+        try {
+            T result = execute(conn);
+            future.complete(result);
+        } catch (Throwable e) {
+            future.fail(e);
+        }
     }
 
-    /**
-     *
-     * @param resultHandler
-     */
-    @Override
-    public void user(Handler<AsyncResult<User>> resultHandler) {
-        resultHandler.handle(Future.succeededFuture(new UserImpl(vertx, dbDoc)));
+    public void execute(Handler<AsyncResult<T>> resultHandler) {
+        vertx.executeBlocking(this, resultHandler);
     }
+
+    protected abstract T execute(ODatabaseDocumentTx conn) throws JelException;
 
 }

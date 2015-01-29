@@ -16,9 +16,6 @@
  */
 package se.liquidbytes.jel.database;
 
-import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
-import com.orientechnologies.orient.server.OServer;
-import com.orientechnologies.orient.server.OServerMain;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.serviceproxy.ProxyHelper;
 import java.lang.invoke.MethodHandles;
@@ -28,7 +25,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Henrik Östman
  */
-public final class DatabaseVerticle extends AbstractVerticle {
+public class DatabaseServiceVerticle extends AbstractVerticle {
 
     // https://github.com/orientechnologies/orientdb/wiki/Embedded-Server
     // http://www.orientechnologies.com/docs/2.0/orientdb.wiki/Tutorial-Document-and-graph-model.html
@@ -36,60 +33,35 @@ public final class DatabaseVerticle extends AbstractVerticle {
     // https://github.com/orientechnologies/orientdb/wiki/Document-Database#asynchronous-query
     // http://www.orientechnologies.com/docs/last/orientdb.wiki/Time-series-use-case.html
     private final static org.slf4j.Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-    private OServer server;
-    private ODatabaseDocumentTx db;
+    protected DatabaseService service;
 
     /**
      * Default constructor.
      */
-    public DatabaseVerticle() {
+    public DatabaseServiceVerticle() {
         // Nothing
     }
 
     /**
      *
+     * @throws java.lang.Exception
      */
     @Override
-    public void start() {
-
-        logger.info("Starting up database server");
-
-        // Start embedded OrientDB-server
-        try {
-            server = OServerMain.create();
-            server.removeShutdownHook();    // Preventing us from stopping. We invoke server.close ourself.
-            server.startup(generateConfig());
-            server.activate();
-        } catch (IllegalArgumentException ex) {
-            logger.error("Probably syntax error in configuration to database-server.", ex);
-            System.exit(2);
-        } catch (Exception ex) {
-            logger.error("general error starting database-server.", ex);
-            System.exit(2);
-        }
-
-        // Create database if not existing and establish a connection.
-        db = new ODatabaseDocumentTx("plocal:./storage/databases/jel");
-        if (!db.exists()) {
-            db.create();
-        } else {
-            // TODO: Checkup connection-pooling. com.orientechnologies.orient.core.db.OPartitionedDatabasePoolFactory
-            db.open("admin", "admin");
-        }
+    public void start() throws Exception {
 
         // Setup Vertx-service-proxy that acts as the API-router for the database against the rest of the application.
-        Database database = Database.create(vertx, db);
-        ProxyHelper.registerService(Database.class, vertx, database, "jel.database");
+        service = DatabaseService.create(vertx, generateConfig());
+        ProxyHelper.registerService(DatabaseService.class, vertx, service, "jel.database");
 
-        logger.info("Database up and running");
+        service.start();
 
         // TEST, remove later
-        Database proxy = Database.createProxy(vertx, "jel.database");
-        proxy.site(res -> {
+        DatabaseService proxy = DatabaseService.createEventBusProxy(vertx, "jel.database");
+        proxy.getConnection(res -> {
             if (res.succeeded()) {
-                res.result().getSite("123", res2 -> {
+                res.result().getSites(res2 -> {
                     if (res2.succeeded()) {
-                        logger.info("got something " + res2.result());
+                        logger.info(res2.result().toString());
                     }
                 });
             }
@@ -98,19 +70,12 @@ public final class DatabaseVerticle extends AbstractVerticle {
 
     /**
      *
+     * @throws java.lang.Exception
      */
     @Override
-    public void stop() {
-        if (server != null) {
-            logger.info("Shuting down databaseserver.");
-
-            if (db != null) {
-                db.close();
-                db = null;
-            }
-
-            server.shutdown();
-            server = null;
+    public void stop() throws Exception {
+        if (service != null) {
+            service.stop();
         }
     }
 
