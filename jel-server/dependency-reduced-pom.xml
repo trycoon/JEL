@@ -21,22 +21,25 @@
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>2.3.2</version>
         <executions>
           <execution>
             <id>default-compile</id>
             <configuration>
-              <showDeprecation>false</showDeprecation>
               <annotationProcessors>
                 <annotationProcessor>io.vertx.codegen.CodeGenProcessor</annotationProcessor>
               </annotationProcessors>
-              <generatedSourcesDirectory>${project.basedir}/src/main/generated</generatedSourcesDirectory>
+              <generatedSourcesDirectory>${project.basedir}/src/main/java</generatedSourcesDirectory>
               <compilerArgs>
-                <arg>-AoutputDirectory=${project.basedir}/src/main</arg>
+                <arg>-AoutputDirectory=${project.basedir}/src/main/generated</arg>
               </compilerArgs>
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>1.9.1</version>
       </plugin>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>
