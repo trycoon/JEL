@@ -1,7 +1,4 @@
-/**
- * @author Henrik Östman
- */
-@GenModule(name = "jel-database")
+@GenModule(name = "databaseservice", groupPackageName = "se.liquidbytes.jel")
 package se.liquidbytes.jel.database;
 
 import io.vertx.codegen.annotations.GenModule;

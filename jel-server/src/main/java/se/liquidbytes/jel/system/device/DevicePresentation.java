@@ -13,45 +13,44 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package se.liquidbytes.jel;
+package se.liquidbytes.jel.system.device;
+
+import java.util.Map;
 
 /**
- * Custom exception class
+ *
+ * @author Henrik Östman
  */
-public class JelException extends RuntimeException {
+public class DevicePresentation {
+
+  private String type;
+  private Map<String, String> settings;
 
   /**
-   * Default constructor for exception class
+   * @return the type
    */
-  public JelException() {
-    super();
+  public String getType() {
+    return type;
   }
 
   /**
-   * Constructor for exception class
-   *
-   * @param message Message
+   * @param type the type to set
    */
-  public JelException(String message) {
-    super(message);
+  public void setType(String type) {
+    this.type = type;
   }
 
   /**
-   * Constructor for exception class
-   *
-   * @param cause Inner exception
+   * @return the settings
    */
-  public JelException(Throwable cause) {
-    super(cause);
+  public Map<String, String> getSettings() {
+    return settings;
   }
 
   /**
-   * Constructor for exception class
-   *
-   * @param message Message
-   * @param cause Inner exception
+   * @param settings the settings to set
    */
-  public JelException(String message, Throwable cause) {
-    super(message, cause);
+  public void setSettings(Map<String, String> settings) {
+    this.settings = settings;
   }
 }

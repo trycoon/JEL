@@ -1,18 +1,17 @@
 /*
- * Copyright (c) 2015, Henrik Östman, All rights reserved.
+ * Copyright 2015 Henrik Östman.
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package se.liquidbytes.jel.database.impl;
 
@@ -33,87 +32,87 @@ import se.liquidbytes.jel.database.DatabaseService;
  */
 public class DatabaseServiceImpl implements DatabaseService {
 
-    private final static org.slf4j.Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-    private final Vertx vertx;
-    private final String config;
-    private OServer server;
-    private ODatabaseDocumentTx db;
+  private final static org.slf4j.Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private final Vertx vertx;
+  private final String config;
+  private OServer server;
+  private ODatabaseDocumentTx db;
 
-    /**
-     * Constructor
-     *
-     * @param vertx
-     * @param config
-     */
-    public DatabaseServiceImpl(Vertx vertx, String config) {
-        this.vertx = vertx;
-        this.config = config;
+  /**
+   * Constructor
+   *
+   * @param vertx
+   * @param config
+   */
+  public DatabaseServiceImpl(Vertx vertx, String config) {
+    this.vertx = vertx;
+    this.config = config;
+  }
+
+  @Override
+  public void start() {
+    logger.info("Starting up database server");
+
+    // Start embedded OrientDB-server
+    try {
+      server = OServerMain.create();
+      server.removeShutdownHook();    // Preventing us from stopping. We invoke server.close ourself.
+      server.startup(this.config);
+      server.activate();
+    } catch (IllegalArgumentException ex) {
+      logger.error("Probably syntax error in configuration to database-server.", ex);
+      System.exit(2);
+    } catch (Exception ex) {
+      logger.error("general error starting database-server.", ex);
+      System.exit(2);
     }
 
-    @Override
-    public void start() {
-        logger.info("Starting up database server");
+    //TODO: Maybe this should be moved to getConnection()?
+    //TODO: Use config.storagepath!
+    // Create database if not existing and establish a connection.
+    db = new ODatabaseDocumentTx("plocal:./storage/databases/jel");
+    if (!db.exists()) {
+      db.create();
+    } else {
+      // TODO: Checkup connection-pooling. com.orientechnologies.orient.core.db.OPartitionedDatabasePoolFactory
+      db.open("admin", "admin");
+    }
 
-        // Start embedded OrientDB-server
+    logger.info("Database up and running");
+  }
+
+  @Override
+  public void stop() {
+    if (server != null) {
+      logger.info("Shuting down databaseserver.");
+
+      vertx.executeBlocking(future -> {
         try {
-            server = OServerMain.create();
-            server.removeShutdownHook();    // Preventing us from stopping. We invoke server.close ourself.
-            server.startup(this.config);
-            server.activate();
-        } catch (IllegalArgumentException ex) {
-            logger.error("Probably syntax error in configuration to database-server.", ex);
-            System.exit(2);
-        } catch (Exception ex) {
-            logger.error("general error starting database-server.", ex);
-            System.exit(2);
+          if (db != null) {
+            db.close();
+            db = null;
+          }
+
+          server.shutdown();
+          server = null;
+          future.complete();
+        } catch (Throwable e) {
+          future.fail(e);
         }
-
-        //TODO: Maybe this should be moved to getConnection()?
-        // Create database if not existing and establish a connection.
-        db = new ODatabaseDocumentTx("plocal:./storage/databases/jel");
-        if (!db.exists()) {
-            db.create();
-        } else {
-            // TODO: Checkup connection-pooling. com.orientechnologies.orient.core.db.OPartitionedDatabasePoolFactory
-            db.open("admin", "admin");
-        }
-
-        logger.info("Database up and running");
+      }, null);
     }
+  }
 
-    @Override
-    public void stop() {
-        if (server != null) {
-            logger.info("Shuting down databaseserver.");
-
-            vertx.executeBlocking(future -> {
-                try {
-                    if (db != null) {
-                        db.close();
-                        db = null;
-                    }
-
-                    server.shutdown();
-                    server = null;
-                    future.complete();
-                } catch (Throwable e) {
-                    future.fail(e);
-                }
-            }, null);
-        }
-    }
-
-    @Override
-    public void getConnection(Handler<AsyncResult<DatabaseConnection>> handler) {
-        vertx.executeBlocking(future -> {
-            try {
-                DatabaseConnection conn = null; // = new DatabaseConnectionImpl(vertx, dataSource.getConnection());
-                future.complete(conn);
-            } catch (Throwable e) {
-                future.fail(e);
-            }
-        }, handler::handle);
-    }
-    
+  @Override
+  public void getConnection(Handler<AsyncResult<DatabaseConnection>> handler) {
+    vertx.executeBlocking(future -> {
+      try {
+        DatabaseConnection conn = new DatabaseConnectionImpl(vertx, db);
+        future.complete(conn);
+      } catch (Throwable e) {
+        future.fail(e);
+      }
+    }, handler::handle);
+  }
 
 }

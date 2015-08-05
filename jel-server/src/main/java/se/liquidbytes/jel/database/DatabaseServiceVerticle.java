@@ -1,23 +1,21 @@
 /*
- * Copyright (c) 2014, Henrik Östman, All rights reserved.
+ * Copyright 2015 Henrik Östman.
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package se.liquidbytes.jel.database;
 
 import io.vertx.core.AbstractVerticle;
-import io.vertx.serviceproxy.ProxyHelper;
 import java.lang.invoke.MethodHandles;
 import org.slf4j.LoggerFactory;
 
@@ -27,89 +25,90 @@ import org.slf4j.LoggerFactory;
  */
 public class DatabaseServiceVerticle extends AbstractVerticle {
 
-    // https://github.com/orientechnologies/orientdb/wiki/Embedded-Server
-    // http://www.orientechnologies.com/docs/2.0/orientdb.wiki/Tutorial-Document-and-graph-model.html
-    // http://www.orientechnologies.com/docs/last/orientdb.wiki/SQL-Insert.html
-    // https://github.com/orientechnologies/orientdb/wiki/Document-Database#asynchronous-query
-    // http://www.orientechnologies.com/docs/last/orientdb.wiki/Time-series-use-case.html
-    private final static org.slf4j.Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-    protected DatabaseService service;
+  // https://github.com/orientechnologies/orientdb/wiki/Embedded-Server
+  // http://www.orientechnologies.com/docs/2.0/orientdb.wiki/Tutorial-Document-and-graph-model.html
+  // http://www.orientechnologies.com/docs/last/orientdb.wiki/SQL-Insert.html
+  // https://github.com/orientechnologies/orientdb/wiki/Document-Database#asynchronous-query
+  // http://www.orientechnologies.com/docs/last/orientdb.wiki/Time-series-use-case.html
+  private final static org.slf4j.Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  protected DatabaseService service;
 
-    /**
-     * Default constructor.
-     */
-    public DatabaseServiceVerticle() {
-        // Nothing
-    }
+  /**
+   * Default constructor.
+   */
+  public DatabaseServiceVerticle() {
+    // Nothing
+  }
 
-    /**
-     *
-     * @throws java.lang.Exception
-     */
-    @Override
-    public void start() throws Exception {
+  /**
+   *
+   * @throws java.lang.Exception
+   */
+  @Override
+  public void start() throws Exception {
 
-        // Setup Vertx-service-proxy that acts as the API-router for the database against the rest of the application.
-        service = DatabaseService.create(vertx, generateConfig());
-        ProxyHelper.registerService(DatabaseService.class, vertx, service, "jel.database");
+    // Setup Vertx-service-proxy that acts as the API-router for the database against the rest of the application.
+    service = DatabaseService.create(vertx, generateConfig());
+    //ProxyHelper.registerService(DatabaseService.class, vertx, service, "jel.database");
 
-        service.start();
+    service.start();
 
-        // TEST, remove later
-        DatabaseService proxy = DatabaseService.createEventBusProxy(vertx, "jel.database");
-        proxy.getConnection(res -> {
-            if (res.succeeded()) {
-                res.result().getSites(res2 -> {
-                    if (res2.succeeded()) {
-                        logger.info(res2.result().toString());
-                    }
-                });
-            }
+    // TEST, remove later
+    DatabaseService proxy = DatabaseService.create(vertx, "jel.database");
+    proxy.getConnection(res -> {
+      if (res.succeeded()) {
+        res.result().getSites(res2 -> {
+          if (res2.succeeded()) {
+            logger.info(res2.result().toString());
+          }
         });
+      }
+    });
+  }
+
+  /**
+   *
+   * @throws java.lang.Exception
+   */
+  @Override
+  public void stop() throws Exception {
+    if (service != null) {
+      service.stop();
+      service = null;
     }
+  }
 
-    /**
-     *
-     * @throws java.lang.Exception
-     */
-    @Override
-    public void stop() throws Exception {
-        if (service != null) {
-            service.stop();
-        }
-    }
+  /**
+   *
+   * @return
+   */
+  private String generateConfig() {
 
-    /**
-     *
-     * @return
-     */
-    private String generateConfig() {
+    StringBuilder builder = new StringBuilder();
+    builder.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+      .append("<orient-server>")
+      .append("  <network>")
+      .append("    <protocols>")
+      .append("       <protocol name=\"binary\" implementation=\"com.orientechnologies.orient.server.network.protocol.binary.ONetworkProtocolBinary\"/>")
+      .append("       <protocol name=\"http\" implementation=\"com.orientechnologies.orient.server.network.protocol.http.ONetworkProtocolHttpDb\"/>")
+      .append("    </protocols>")
+      .append("    <listeners>")
+      .append("      <listener ip-address=\"0.0.0.0\" port-range=\"2424-2430\" protocol=\"binary\"/>")
+      .append("      <listener ip-address=\"0.0.0.0\" port-range=\"2480-2490\" protocol=\"http\"/>")
+      .append("    </listeners>")
+      .append("  </network>")
+      .append("  <users>")
+      .append("    <user name=\"root\" password=\"OEVkk5t7!\" resources=\"*\"/>")
+      .append("  </users>")
+      .append("  <properties>")
+      .append("    <entry name=\"log.console.level\" value=\"info\"/>")
+      .append("    <entry name=\"log.file.level\" value=\"fine\"/>")
+      //The following is required to eliminate an error or warning, "Error on resolving property: ORIENTDB_HOME"
+      .append("    <entry name=\"plugin.dynamic\" value=\"false\"/>")
+      .append("  </properties>")
+      .append("</orient-server>");
 
-        StringBuilder builder = new StringBuilder();
-        builder.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
-                .append("<orient-server>")
-                .append("  <network>")
-                .append("    <protocols>")
-                .append("       <protocol name=\"binary\" implementation=\"com.orientechnologies.orient.server.network.protocol.binary.ONetworkProtocolBinary\"/>")
-                .append("       <protocol name=\"http\" implementation=\"com.orientechnologies.orient.server.network.protocol.http.ONetworkProtocolHttpDb\"/>")
-                .append("    </protocols>")
-                .append("    <listeners>")
-                .append("      <listener ip-address=\"0.0.0.0\" port-range=\"2424-2430\" protocol=\"binary\"/>")
-                .append("      <listener ip-address=\"0.0.0.0\" port-range=\"2480-2490\" protocol=\"http\"/>")
-                .append("    </listeners>")
-                .append("  </network>")
-                .append("  <users>")
-                .append("    <user name=\"root\" password=\"OEVkk5t7!\" resources=\"*\"/>")
-                .append("  </users>")
-                .append("  <properties>")
-                .append("    <entry name=\"log.console.level\" value=\"info\"/>")
-                .append("    <entry name=\"log.file.level\" value=\"fine\"/>")
-                //The following is required to eliminate an error or warning, "Error on resolving property: ORIENTDB_HOME"
-                .append("    <entry name=\"plugin.dynamic\" value=\"false\"/>")
-                .append("  </properties>")
-                .append("</orient-server>");
-
-        return builder.toString();
-    }
+    return builder.toString();
+  }
 
 }

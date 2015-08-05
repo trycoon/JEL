@@ -1,0 +1,16 @@
+JEL (later "the application") is modular based application that could be extended and enhanced with the use of "plugins".
+Plugins can add support for new adapters, devices, visual components, interface with third-party software, and more.
+
+All plugins that should be used must be placed in this directory for the application to find them, plugins must be compressed to a single file in the form of a Java Jar-file or a Zip-file for other languages.
+Much like the WebApps-directory in a Servlet-container, plugins placed in this directory is automatically detected by the application and decompressed into a directory with the same name as the plugin.
+The plugin is then verified that it has the structure of a valid JEL-plugin, and after this has been confirmed the plugin is loaded into the system.
+
+To uninstall a plugin, simply delete the plugin Jar or Zip-file, the application will automatically stop the plugin and remove its directory.
+Updating an existing plugin is handled in the same way, just overwrite a existing Jar or Zip-file, the application will remove the old plugin and load the new one.
+
+==============================================================================================================================
+= Each plugin-directory are considered private for the application and should NEVER be added, removed, or modified by hand!
+==============================================================================================================================
+
+Plugins may fail to load for several reasons, like missing write permission to plugins-directory, malformed or corrupt plugin, the application is too old for this plugin, and so forth.
+Most of the times the reason of the failure could be viewed in the log-file for the application, "jel.log", using a simple texteditor.

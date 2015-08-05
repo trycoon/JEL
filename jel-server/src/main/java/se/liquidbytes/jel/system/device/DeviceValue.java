@@ -13,45 +13,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package se.liquidbytes.jel;
+package se.liquidbytes.jel.system.device;
+
+import java.time.Clock;
 
 /**
- * Custom exception class
+ *
+ * @author Henrik Östman
  */
-public class JelException extends RuntimeException {
+public class DeviceValue {
+  private String value;
+  private Clock time;
 
   /**
-   * Default constructor for exception class
+   * @return the value
    */
-  public JelException() {
-    super();
+  public String getValue() {
+    return value;
   }
 
   /**
-   * Constructor for exception class
-   *
-   * @param message Message
+   * @param value the value to set
    */
-  public JelException(String message) {
-    super(message);
+  public void setValue(String value) {
+    this.value = value;
   }
 
   /**
-   * Constructor for exception class
-   *
-   * @param cause Inner exception
+   * @return the time
    */
-  public JelException(Throwable cause) {
-    super(cause);
+  public Clock getTime() {
+    return time;
   }
 
   /**
-   * Constructor for exception class
-   *
-   * @param message Message
-   * @param cause Inner exception
+   * @param time the time to set
    */
-  public JelException(String message, Throwable cause) {
-    super(message, cause);
+  public void setTime(Clock time) {
+    this.time = time;
   }
 }

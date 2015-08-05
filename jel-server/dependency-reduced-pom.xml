@@ -12,30 +12,40 @@
   <version>1.0.0</version>
   <licenses>
     <license>
-      <name>The GNU Lesser General Public License, Version 3.0</name>
-      <url>http://www.gnu.org/licenses/lgpl-3.0.txt</url>
+      <name>Apache License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
   <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.1</version>
+          <executions>
+            <execution>
+              <id>default-compile</id>
+              <configuration>
+                <annotationProcessors>
+                  <annotationProcessor>io.vertx.codegen.CodeGenProcessor</annotationProcessor>
+                </annotationProcessors>
+                <generatedSourcesDirectory>${project.basedir}/src/main/generated</generatedSourcesDirectory>
+                <compilerArgs>
+                  <arg>-AoutputDirectory=${project.basedir}/src/main</arg>
+                </compilerArgs>
+              </configuration>
+            </execution>
+          </executions>
+          <configuration>
+            <source>1.8</source>
+            <target>1.8</target>
+            <encoding>${project.build.sourceEncoding}</encoding>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
     <plugins>
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>default-compile</id>
-            <configuration>
-              <annotationProcessors>
-                <annotationProcessor>io.vertx.codegen.CodeGenProcessor</annotationProcessor>
-              </annotationProcessors>
-              <generatedSourcesDirectory>${project.basedir}/src/main/java</generatedSourcesDirectory>
-              <compilerArgs>
-                <arg>-AoutputDirectory=${project.basedir}/src/main/generated</arg>
-              </compilerArgs>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
@@ -54,7 +64,7 @@
               <transformers>
                 <transformer>
                   <manifestEntries>
-                    <Main-Class>se.liquidbytes.jel.JelServer</Main-Class>
+                    <Main-Class>se.liquidbytes.jel.JelStarter</Main-Class>
                   </manifestEntries>
                 </transformer>
               </transformers>
@@ -74,10 +84,27 @@
       </plugin>
     </plugins>
   </build>
+  <reporting>
+    <plugins>
+      <plugin>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>5.0</version>
+        <configuration>
+          <configLocation>config/sun_checks.xml</configLocation>
+        </configuration>
+      </plugin>
+    </plugins>
+  </reporting>
   <properties>
-    <logback.version>1.1.2</logback.version>
-    <vertx.version>3.0.0-milestone2</vertx.version>
-    <orientdb.version>2.0-rc2</orientdb.version>
+    <args4j.version>2.0.29</args4j.version>
+    <ruby.version>1.7.20</ruby.version>
+    <junit.version>4.11</junit.version>
+    <hazelcast.version>3.5</hazelcast.version>
+    <orientdb.version>2.0.2</orientdb.version>
+    <handlebars.version>2.2.2</handlebars.version>
+    <log4j.version>2.3</log4j.version>
+    <vertx.version>3.0.0</vertx.version>
+    <groovy.version>2.4.3</groovy.version>
   </properties>
 </project>
 
