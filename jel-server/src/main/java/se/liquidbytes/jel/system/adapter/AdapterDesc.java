@@ -16,11 +16,11 @@
 package se.liquidbytes.jel.system.adapter;
 
 /**
- * Class repressent a physical adapter JEL use for communication with devices connected to the adpater.
+ * Class holds information about a physical adapter used for communication with devices connected to the adpater.
  *
  * @author Henrik Östman
  */
-public final class Adapter {
+public final class AdapterDesc {
 
   private String name;
   private String address;
@@ -33,7 +33,7 @@ public final class Adapter {
    * @param address IP-address the adapter is listening to
    * @param port port adapter is listening on
    */
-  public Adapter(String name, String address, int port) {
+  public AdapterDesc(String name, String address, int port) {
     this.setName(name);
     this.setAddress(address);
     this.setPort(port);

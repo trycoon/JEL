@@ -16,7 +16,7 @@
 package se.liquidbytes.jel.system.plugin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.vertx.core.Vertx;
+import io.vertx.core.eventbus.DeliveryOptions;
 import java.io.BufferedReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.slf4j.Logger;
@@ -47,7 +48,9 @@ import se.liquidbytes.jel.FileUtils;
 import se.liquidbytes.jel.JelException;
 import se.liquidbytes.jel.Settings;
 import se.liquidbytes.jel.SystemInfo;
-import se.liquidbytes.jel.plugins.Plugin;
+import se.liquidbytes.jel.system.JelService;
+import static se.liquidbytes.jel.system.plugin.Plugin.EVENTBUS_PLUGINS;
+import se.liquidbytes.jel.system.plugin.Plugin.Eventbus_Plugins;
 
 /**
  * Class that loads and keeps track of all availablePlugins (extensions to JEL).
@@ -77,10 +80,6 @@ public final class PluginManager {
    */
   private final Path pluginsPath;
   /**
-   * Vertx instance.
-   */
-  private final Vertx vertx;
-  /**
    * Classloader for loading Java-based plugins.
    */
   public final ClassLoader classLoader;
@@ -105,16 +104,17 @@ public final class PluginManager {
    * PluginDesc manager constructor.
    *
    * @param storagePath path to storage-directory.
-   * @param vertx Vertx instace
-   * @throws java.io.IOException Throws exception if vital directories for the plugin manager could not be created.
+   * @throws JelException Throws exception if vital directories for the plugin manager could not be created.
    */
-  public PluginManager(String storagePath, Vertx vertx) throws IOException {
+  public PluginManager(String storagePath) throws JelException {
     logger.debug("Initializing Plugin Manager...");
 
-    this.vertx = vertx;
-
-    // Check and create "plugins"-directory if necessary.
-    this.pluginsPath = Files.createDirectories(Paths.get(storagePath, "plugins"));
+    try {
+      // Check and create "plugins"-directory if necessary.
+      this.pluginsPath = Files.createDirectories(Paths.get(storagePath, "plugins"));
+    } catch (IOException ex) {
+      throw new JelException(String.format("Failed to create plugin directory, %s", Paths.get(storagePath, "plugins")), ex);
+    }
 
     this.installedPlugins = new LinkedHashMap<>();
     this.loadedPlugins = new LinkedHashMap<>();
@@ -154,12 +154,14 @@ public final class PluginManager {
         PluginDesc desc = installedPlugins.get(pluginName);
         Plugin plugin = loadedPlugins.get(desc);
 
-        if (plugin != null) {
-          plugin.pluginStop();
-        }
-
         loadedPlugins.remove(desc);
         installedPlugins.remove(pluginName);
+
+        if (plugin != null) {
+          plugin.pluginStop();
+          JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, plugin, new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_STOPPED.name()));
+        }
+
       } catch (Exception ex) {
         logger.warn("Failed to stop plugin('{}') during application shutdown.", pluginName, ex);
       }
@@ -173,7 +175,6 @@ public final class PluginManager {
       try {
         try (PluginClassLoader classloader = classloaders.get(desc)) {
           classloader.unloadJarFiles();
-          classloader.close();
         }
 
         classloaders.remove(desc);
@@ -397,8 +398,6 @@ public final class PluginManager {
       // TODO: For Javascript-plugins, get a script-instance and execute scripts start-function.
     } else {
       try {
-        // TODO: should we cache classloaders?
-
         PluginClassLoader pluginClassloader = new PluginClassLoader(classLoader);
         pluginClassloader.addDirectory(plugin.getDirectoryPath());
         // Fault finding.
@@ -411,6 +410,7 @@ public final class PluginManager {
 
         if (newInstalled) {
           pluginInstance.pluginInstall();
+          JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, plugin.getName(), new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_INSTALLED.name()));
         }
 
         pluginInstance.pluginStart();
@@ -418,6 +418,9 @@ public final class PluginManager {
         this.classloaders.put(plugin, pluginClassloader);
         this.installedPlugins.put(plugin.getName(), plugin);
         this.loadedPlugins.put(plugin, pluginInstance);
+
+        JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, plugin.getName(), new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_STARTED.name()));
+
       } catch (ClassNotFoundException cnfe) {
         throw new JelException(String.format("Failed to create an instance of the plugin, %s, the mainClass-property('%s') in the descriptionfile may point a non-existing class.", plugin.getDirectoryPath(), plugin.getMainClass()), cnfe);
       } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | SecurityException ex) {
@@ -425,7 +428,6 @@ public final class PluginManager {
       }
     }
 
-    //logger.debug("Starting plugin '{}'...", plugin.getName());
     logger.info("Started plugin '{}'.", plugin.getName());
   }
 
@@ -494,7 +496,7 @@ public final class PluginManager {
               }
 
               final WatchEvent<Path> watchEventPath = (WatchEvent<Path>) watchEvent;
-              Path fullPath = ((Path) key.watchable()).resolve(watchEventPath.context());
+              final Path fullPath = ((Path) key.watchable()).resolve(watchEventPath.context());
               String filename = fullPath.toString();
 
               // We only support/are intressted in these. We also add a check if the plugin already has been processed, since sometimes file changes triggers both a file-create and a file-modify.
@@ -502,18 +504,28 @@ public final class PluginManager {
 
                 logger.debug("Detected change in plugin-directory, kind: {}, file: {}", kind.toString(), filename);
 
-                PluginDesc existingPlugin = this.installedPlugins.values().stream().filter(x -> x.getOriginalFile() == fullPath).findFirst().get();
+                PluginDesc existingPlugin = null;
+                Optional<PluginDesc> possiblePlugin = this.installedPlugins.values().stream().filter(
+                    x -> x.getOriginalFile().equals(fullPath)
+                ).findFirst();
+
+                if (possiblePlugin.isPresent()) {
+                  existingPlugin = possiblePlugin.get();
+                }
 
                 // Changing an existing file does many times generate a ENTRY-CREATE-event so we capture both here and find out later if it's a new plugin or if it's an update.
                 if (kind == StandardWatchEventKinds.ENTRY_CREATE || kind == StandardWatchEventKinds.ENTRY_MODIFY) {
                   if (existingPlugin == null) {
+                    logger.info("Plugin({}) detected in plugin-directory.", fullPath);
                     installPlugin(fullPath);
                   } else {
+                    logger.info("Updated plugin({}) detected in plugin-directory.", existingPlugin.getOriginalFile());
                     updatePlugin(existingPlugin);
                   }
                 } else if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
                   // If plugin-file has been removed but we don't find the plugin in our internal list of installed plugins, skip uninstall step.
                   if (existingPlugin != null) {
+                    logger.info("Removed plugin({}) detected in plugin-directory.", existingPlugin.getOriginalFile());
                     uninstallPlugin(existingPlugin);
                   }
                 }
@@ -579,12 +591,10 @@ public final class PluginManager {
    */
   private void installPlugin(Path pluginPath) {
 
-    logger.info("Plugin({}) detected in plugin-directory.", pluginPath);
-
     Path existingPluginDirectory = getDirectoryPathFromFile(pluginPath, false);
 
     // If an old directory already exists, remove it first before expanding the new plugin.
-    if (Files.exists(existingPluginDirectory, LinkOption.NOFOLLOW_LINKS)) {
+    if (existingPluginDirectory != null && Files.exists(existingPluginDirectory, LinkOption.NOFOLLOW_LINKS)) {
       logger.info("Removing stale plugin directory: {}", existingPluginDirectory);
 
       try {
@@ -617,9 +627,7 @@ public final class PluginManager {
    * @param plugin PluginDesc to update
    */
   private void updatePlugin(PluginDesc plugin) {
-    logger.info("Updated plugin({}) detected in plugin-directory.", plugin.getOriginalFile());
 
-    installedPlugins.remove(plugin.getName());
   }
 
   /**
@@ -627,8 +635,44 @@ public final class PluginManager {
    *
    * @param plugin PluginDesc to uninstall
    */
-  private void uninstallPlugin(PluginDesc plugin) {
-    logger.info("Removed plugin({}) detected in plugin-directory.", plugin.getOriginalFile());
+  private void uninstallPlugin(PluginDesc desc) {
+
+    try {
+      Plugin plugin = loadedPlugins.get(desc);
+
+      if (plugin != null) {
+        loadedPlugins.remove(desc);
+
+        plugin.pluginStop();
+        Thread.sleep(500);  // Give it some time to stop.
+        JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, desc.getName(), new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_STOPPED.name()));
+
+        plugin.pluginUninstall();
+      }
+
+      installedPlugins.remove(desc.getName());
+
+      try (PluginClassLoader classloader = classloaders.get(desc)) {
+        if (classloader != null) {
+          classloader.unloadJarFiles();
+          classloaders.remove(desc);
+        }
+      }
+
+      Thread.sleep(1500); // Give it some time to uninstall before we remove all files.
+
+      System.gc();
+
+      // Remove files in the filesystem.
+      Files.deleteIfExists(desc.getOriginalFile());
+      FileUtils.deleteDirectory(desc.getDirectoryPath());
+
+      logger.info("Plugin '{}' successfully uninstalled.", desc.getName());
+      JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, desc.getName(), new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_UNINSTALLED.name()));
+
+    } catch (InterruptedException | IOException ex) {
+      logger.warn("Failed to uninstall plugin '{}'.", desc.getName(), ex);
+    }
   }
 
   /**
@@ -640,22 +684,25 @@ public final class PluginManager {
     return new ArrayList(this.installedPlugins.values());
   }
 
+  public List<Plugin> getAvailablePluginsToInstall() {
+    //Get list of all remote plugins, filter out those that's already installed.
+    throw new UnsupportedOperationException("Not supported yet.");
+  }
 
-  /*public List<Plugin> getAvailablePluginsToInstall() {
-   //TODO: Get list of all remote plugins, filter out those that's already installed.
-   }*/
-  /*
-   public List<Plugin> getAvailablePluginsToUpdate() {
-   //TODO: Get list of remote plugins that are newer than already installed plugins.
-   }*/
+  public List<Plugin> getAvailablePluginsToUpdate() {
+    //Get list of remote plugins that are newer than already installed plugins.
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  }
+
   /**
    * Install provided plugins
    *
    * @param plugins Plugins to install.
    */
   public void installPlugins(List<PluginDesc> plugins) {
-    // TODO: Enter a list of remote plugins to install. Download them from repository, and install them. Return those who was successfully installed.
+    // Enter a list of remote plugins to install. Download them from repository, and install them. Return those who was successfully installed.
     // Also load required parent-plugins!  This should be done in a synchronized-block I guess.
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
   }
 
   /**
@@ -664,8 +711,9 @@ public final class PluginManager {
    * @param plugins Plugins to update.
    */
   public void updatePlugins(List<PluginDesc> plugins) {
-    // TODO: Enter a list of remote plugins to update. Check if newer versions is available. Download them from repository, and install them. Return those who was successfully updated.
+    // Enter a list of remote plugins to update. Check if newer versions is available. Download them from repository, and install them. Return those who was successfully updated.
     // Also update required parent-plugins!  This should be done in a synchronized-block I guess.
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
   }
 
   /**
@@ -674,7 +722,12 @@ public final class PluginManager {
    * @param plugins Plugins to uninstall.
    */
   public void uninstallPlugin(List<PluginDesc> plugins) {
-    //TODO: Iterate over provided plugins and call stop() on each. Remove their filedirectory and original jar/zip-files.
-    // Child-plugins dependent of this plugin should also be removed. This should be done in a synchronized-block I guess.
+    if (plugins == null || plugins.isEmpty()) {
+      return;
+    }
+
+    for (PluginDesc plugin : plugins) {
+      uninstallPlugin(plugin);
+    }
   }
 }

@@ -15,27 +15,25 @@
  */
 package se.liquidbytes.jel.system.adapter;
 
-import io.vertx.core.Vertx;
-import java.io.File;
+import io.vertx.core.DeploymentOptions;
 import java.lang.invoke.MethodHandles;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import se.liquidbytes.jel.Settings;
+import se.liquidbytes.jel.system.JelService;
 
 /**
- * Class that loads and keeps track of all adapters.
+ * Class that loads and keeps track of all adapterDescriptions.
  *
  * @author Henrik Östman
  */
 public final class AdapterManager {
 
   /**
-   * File of all adapters. Loaded at applicationstart, and updated every time we add a new Adapter.
+   * File of all adapterDescriptions. Loaded at applicationstart, and updated every time we add a new AdapterDesc.
    */
   private final static String ADAPTERS_FILE = "adapters.json";
   /**
@@ -43,51 +41,76 @@ public final class AdapterManager {
    */
   private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   /**
-   * Collection of all loaded adapters.
+   * Collection of all adapters.
    */
-  private List<Adapter> adapters;
+  private final List<AbstractAdapter> adapters;
   /**
-   * Vertx instance
+   * Collection of all adapter descriptions.
    */
-  private final Vertx vertx;
+  private final Map<AbstractAdapter, AdapterDesc> adapterDescriptions;
+  /**
+   * Collection of verticle deployment id for every adapter.
+   */
+  private final Map<AbstractAdapter, String> deploymentIds;
 
   /**
-   * Constructor
-   *
-   * @param vertx Vertx instance.
+   * Default constructor.
    */
-  public AdapterManager(Vertx vertx) {
-    this.vertx = vertx;
+  public AdapterManager() {
+    adapters = new ArrayList<>();
+    adapterDescriptions = new HashMap<>();
+    deploymentIds = new HashMap<>();
   }
 
   /**
-   * Add a new adapter
+   * Register a new adapter.
    *
    * @param adapter A adapter
    */
-  /*public void addAdapter(Adapter adapter) {    synchronized (adapters) {
-   adapters.put(generateKey(adapter), adapter);
-   }
-   }*/
-  private void loadAdapters() {
+  public void registerAdapter(AbstractAdapter adapter) {
+    DeploymentOptions deployOptions = new DeploymentOptions();
+    deployOptions.setInstances(1);
+    deployOptions.setWorker(true);
 
-    Path path = Paths.get(Settings.get("storagepath") + File.separator + ADAPTERS_FILE);
+    JelService.vertx().deployVerticle(adapter, deployOptions, res -> {
+      if (res.failed()) {
+        logger.error("Failed to deploy verticle for adapter '{}'.", adapter.getName(), res.cause());
+        // Maybe this method should have a callback to notify adapter of deployment status. Simply throwing a exception here won't work.
+      } else {
+        adapters.add(adapter);
+        adapterDescriptions.put(adapter, null); //TODO: Sett null here to a valid adapter description!!!
+        deploymentIds.put(adapter, res.result());
 
-
-    logger.info("Successfully loaded list of available adapters.");
+        logger.info("Successfully deployed verticle for adapter '{}'.", adapter.getName());
+      }
+    });
   }
 
   /**
-   * Returns the list of all loaded adapters.
+   * Unregister a existing adapter.
+   *
+   * @param adapter A adapter
+   */
+  public void unregisterAdapter(AbstractAdapter adapter) {
+    String deploymentId = deploymentIds.get(adapter);
+
+    if (deploymentId != null) {
+      JelService.vertx().undeploy(deploymentId);
+    }
+  }
+
+  /*private void loadAdapters() {
+
+   Path path = Paths.get(Settings.get("storagepath") + File.separator + ADAPTERS_FILE);
+
+   logger.info("Successfully loaded list of available adapterDescriptions.");
+   }*/
+  /**
+   * Returns the list with information of all adapters.
    *
    * @return All adapters
    */
-  public synchronized List<Adapter> getAdapters() {
-    if (adapters == null) {
-      adapters = new ArrayList<>();
-      loadAdapters();
-    }
-
-    return Collections.<Adapter>unmodifiableList(adapters);
+  public synchronized List<AdapterDesc> getAdapters() {
+    return new ArrayList(adapterDescriptions.values());
   }
 }

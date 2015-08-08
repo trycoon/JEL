@@ -18,76 +18,36 @@ package se.liquidbytes.jel.system.impl;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
-import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import se.liquidbytes.jel.JelException;
-import se.liquidbytes.jel.Settings;
-import static se.liquidbytes.jel.plugins.EventbusTransceiver.EVENTBUS_ADAPTERS;
+import static se.liquidbytes.jel.system.adapter.AbstractAdapter.EVENTBUS_ADAPTERS;
 import se.liquidbytes.jel.system.JelService;
-import se.liquidbytes.jel.system.adapter.Adapter;
-import se.liquidbytes.jel.system.adapter.AdapterManager;
+import se.liquidbytes.jel.system.JelServiceProxy;
+import se.liquidbytes.jel.system.adapter.AdapterDesc;
 import se.liquidbytes.jel.system.plugin.PluginDesc;
-import se.liquidbytes.jel.system.plugin.PluginManager;
 
 /**
  *
  * @author Henrik Östman
  */
-public class JelServiceImpl implements JelService {
+public class JelServiceImpl implements JelServiceProxy {
 
   /**
    * Logghandler instance
    */
   private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-  /**
-   * Vertx instance
-   */
-  private final Vertx vertx;
-  /**
-   * Plugin Manager instance
-   */
-  private PluginManager pluginManager;
-  /**
-   * Adapter Manager instance
-   */
-  private AdapterManager adapterManager;
-
-  /**
-   * Constructor
-   *
-   * @param vertx Vertx instance
-   */
-  public JelServiceImpl(Vertx vertx) {
-    this.vertx = vertx;
-  }
 
   /**
    * Method for starting up service.
    */
   @Override
   public void start() {
-
-    try {
-      pluginManager = new PluginManager(Settings.getStoragePath().toString(), vertx);
-      pluginManager.start();
-    } catch (IOException ex) {
-      throw new JelException("Fail to initialize Plugin Manager.", ex);
-    }
-
-    /*List<Plugin> plugins = pluginManager.loadExistingPlugins();
-     for (Plugin plugin : plugins) {
-     logger.info("Activated plugin: {}, version: {}", plugin.getName(), plugin.getVersion());
-     }*/
-    adapterManager = new AdapterManager(vertx);
-
-    //TODO: Get settings from adapter manager, or maybe adaptermanager should do this work??!
+    JelService.pluginManager().start();
   }
 
   /**
@@ -95,8 +55,8 @@ public class JelServiceImpl implements JelService {
    */
   @Override
   public void stop() {
-    if (pluginManager != null) {
-      pluginManager.stop();
+    if (JelService.pluginManager() != null) {
+      JelService.pluginManager().stop();
     }
   }
 
@@ -104,7 +64,7 @@ public class JelServiceImpl implements JelService {
   @Override
   public void getInstalledPlugins(Handler<AsyncResult<JsonArray>> resultHandler) {
 
-    List<PluginDesc> plugins = pluginManager.getInstalledPlugins();
+    List<PluginDesc> plugins = JelService.pluginManager().getInstalledPlugins();
 
     JsonArray list = new JsonArray();
     plugins.stream().forEach((plugin) -> {
@@ -186,10 +146,10 @@ public class JelServiceImpl implements JelService {
 
     DeliveryOptions options = new DeliveryOptions();
     options.addHeader("action", "listDevices");
-    List<Adapter> adapters = adapterManager.getAdapters();
+    List<AdapterDesc> adapters = JelService.adapterManager().getAdapters();
     //TODO: If list is empty, call resultHandler.handle(Future.succeededFuture
     adapters.stream().forEach((_item) -> {
-      vertx.eventBus().send(EVENTBUS_ADAPTERS, null, options, res -> {
+      JelService.vertx().eventBus().send(EVENTBUS_ADAPTERS, null, options, res -> {
         if (res.succeeded()) {
           //TODO: We must wait for alla responses before we call this!!!
           resultHandler.handle(Future.succeededFuture((JsonArray) res.result().body()));

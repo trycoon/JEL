@@ -25,7 +25,7 @@ import se.liquidbytes.jel.Settings;
  */
 public class MainVerticle extends AbstractVerticle {
 
-  private JelService service;
+  private JelServiceProxy service;
 
   /**
    * Method for starting up service.
@@ -33,11 +33,11 @@ public class MainVerticle extends AbstractVerticle {
    */
   @Override
   public void start() throws Exception {
-    service = JelService.create(vertx);
+    service = JelServiceProxy.create(vertx);
     service.start();
 
     // Register service to eventbus once it's started, it can now receive requests.
-    ProxyHelper.registerService(JelService.class, vertx, service, Settings.EVENTBUS_NAME);
+    ProxyHelper.registerService(JelServiceProxy.class, vertx, service, Settings.EVENTBUS_NAME);
   }
 
   /**

@@ -15,88 +15,90 @@
  */
 package se.liquidbytes.jel.system;
 
-import io.vertx.codegen.annotations.ProxyGen;
-import io.vertx.codegen.annotations.ProxyIgnore;
-import io.vertx.core.AsyncResult;
-import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
-import io.vertx.core.json.JsonArray;
-import io.vertx.core.json.JsonObject;
-import io.vertx.serviceproxy.ProxyHelper;
-import se.liquidbytes.jel.system.impl.JelServiceImpl;
+import se.liquidbytes.jel.system.adapter.AdapterManager;
+import se.liquidbytes.jel.system.plugin.PluginManager;
 
 /**
+ * Class with static references to common used instances needed by JEL components.
  *
  * @author Henrik Östman
  */
-@ProxyGen // Generate the proxy and handler
-public interface JelService {
+public final class JelService {
 
   /**
-   * Factory method to create an instance of the service.
-   *
-   * @param vertx Vertx instance
-   * @return Service instance
+   * Vertx instance   *
    */
-  static JelService create(Vertx vertx) {
-    return new JelServiceImpl(vertx);
+  private static Vertx vertx;
+
+  /**
+   * Plugin Manager instance
+   */
+  private static PluginManager pluginManager;
+
+  /**
+   * Adapter Manager instance
+   */
+  private static AdapterManager adapterManager;
+
+  /*
+   * Private constructor, to prevent instances from being created.
+   */
+  private JelService() {
+    // Do nothing here!
   }
 
   /**
-   * Factory method to create an proxy to the service.
+   * Get vertx instance.
    *
-   * @param vertx Vertx instance
-   * @param address Eventbus address to listen on
-   * @return Proxy instance
+   * @return vertx instance.
    */
-  static JelService createProxy(Vertx vertx, String address) {
-    return ProxyHelper.createProxy(JelService.class, vertx, address);
+  public static Vertx vertx() {
+    return vertx;
   }
 
   /**
-   * Method for starting up service.
+   * Set vertx instance.
+   *
+   * @param vertx
    */
-  @ProxyIgnore
-  void start();
+  static void vertx(Vertx vertx) {
+    JelService.vertx = vertx;
+  }
 
   /**
-   * Method for stopping service, must be called upon during application shutdown.
+   * Get plugin manager instance.
+   *
+   * @return plugin manager instance.
    */
-  @ProxyIgnore
-  void stop();
+  public static PluginManager pluginManager() {
+    return pluginManager;
+  }
 
-  // Plugins
-  void getInstalledPlugins(Handler<AsyncResult<JsonArray>> resultHandler);
+  /**
+   * Set plugin manager instance.
+   *
+   * @param pluginManager
+   */
+  static void pluginManager(PluginManager pluginManager) {
+    JelService.pluginManager = pluginManager;
+  }
 
-  void getAvailablePluginsToInstall(Handler<AsyncResult<JsonArray>> resultHandler);
+  /**
+   * Get adapter manager instance.
+   *
+   * @return adapter manager instance.
+   */
+  public static AdapterManager adapterManager() {
+    return adapterManager;
+  }
 
-  void getAvailablePluginsToUpdate(Handler<AsyncResult<JsonArray>> resultHandler);
-
-  void installPlugins(JsonObject plugins, Handler<AsyncResult<JsonObject>> resultHandler);
-
-  void updatePlugins(JsonObject plugins, Handler<AsyncResult<JsonObject>> resultHandler);
-
-  void uninstallPlugin(String name, Handler<AsyncResult<Void>> resultHandler);
-
-  // Sites
-  void createSite(JsonObject site, Handler<AsyncResult<JsonObject>> resultHandler);
-
-  void listSites(Handler<AsyncResult<JsonArray>> resultHandler);
-
-  void retrieveSite(String id, Handler<AsyncResult<JsonObject>> resultHandler);
-
-  void updateSite(String id, JsonObject site, Handler<AsyncResult<JsonObject>> resultHandler);
-
-  void deleteSite(String id, Handler<AsyncResult<Void>> resultHandler);
-
-  // Devices
-  void createUnboundDevice(JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler);
-
-  void listUnboundDevices(Handler<AsyncResult<JsonArray>> resultHandler);
-
-  void retrieveUnboundDevice(String id, Handler<AsyncResult<JsonObject>> resultHandler);
-
-  void updateUnboundDevice(String id, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler);
-
-  void deleteUnboundDevice(String id, Handler<AsyncResult<Void>> resultHandler);
+  /**
+   * Set adapter manager instance.
+   *
+   * @param adapterManager
+   */
+  static void adapterManager(AdapterManager adapterManager) {
+    JelService.adapterManager = adapterManager;
+  }
 }

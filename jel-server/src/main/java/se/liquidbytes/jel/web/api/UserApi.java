@@ -20,7 +20,7 @@ import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import se.liquidbytes.jel.Settings;
-import se.liquidbytes.jel.system.JelService;
+import se.liquidbytes.jel.system.JelServiceProxy;
 
 /**
  *
@@ -29,7 +29,7 @@ import se.liquidbytes.jel.system.JelService;
 public class UserApi {
 
   private final Vertx vertx;
-  private final JelService service;
+  private final JelServiceProxy service;
 
   /**
    * Constructor
@@ -38,7 +38,7 @@ public class UserApi {
    */
   public UserApi(Vertx vertx) {
     this.vertx = vertx;
-    service = JelService.createProxy(this.vertx, Settings.EVENTBUS_NAME);
+    service = JelServiceProxy.createProxy(this.vertx, Settings.EVENTBUS_NAME);
   }
 
   public void create(RoutingContext context) {

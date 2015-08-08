@@ -37,17 +37,6 @@
   </properties>
     
   <dependencies>
-    <!-- JEL dependencies -->
-    <dependency>
-      <groupId>se.liquidbytes</groupId>
-      <artifactId>jel-plugins</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency> <!-- TODO: This should not be hardcoded here, it shuold be dynamic loaded. -->
-      <groupId>se.liquidbytes.jel.adapters</groupId>
-      <artifactId>owfs</artifactId>
-      <version>${project.version}</version>
-    </dependency>
     <!-- Maven-artifact dependencies, used for comparing versionnumbers. -->
     <dependency>
       <groupId>org.apache.maven</groupId>
@@ -105,11 +94,6 @@
       <artifactId>log4j-core</artifactId>
       <version>${log4j.version}</version>
     </dependency>
-    <dependency>
-      <groupId>io.vertx</groupId>
-      <artifactId>vertx-service-factory</artifactId>
-      <version>${vertx.version}</version>
-    </dependency>
     <!-- Vert.x dependencies -->	
     <dependency>
       <groupId>io.vertx</groupId>
@@ -129,6 +113,11 @@
     <dependency>
       <groupId>io.vertx</groupId>
       <artifactId>vertx-service-proxy</artifactId>
+      <version>${vertx.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-service-factory</artifactId>
       <version>${vertx.version}</version>
     </dependency>
     <dependency>
