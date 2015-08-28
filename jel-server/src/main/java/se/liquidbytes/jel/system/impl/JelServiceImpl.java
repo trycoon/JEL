@@ -25,10 +25,10 @@ import java.lang.invoke.MethodHandles;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static se.liquidbytes.jel.system.adapter.AbstractAdapter.EVENTBUS_ADAPTERS;
 import se.liquidbytes.jel.system.JelService;
 import se.liquidbytes.jel.system.JelServiceProxy;
-import se.liquidbytes.jel.system.adapter.AdapterDesc;
+import static se.liquidbytes.jel.system.adapter.AdapterManager.EVENTBUS_ADAPTERS;
+import se.liquidbytes.jel.system.adapter.AdapterSettings;
 import se.liquidbytes.jel.system.plugin.PluginDesc;
 
 /**
@@ -47,6 +47,7 @@ public class JelServiceImpl implements JelServiceProxy {
    */
   @Override
   public void start() {
+    JelService.adapterManager().start();
     JelService.pluginManager().start();
   }
 
@@ -55,8 +56,15 @@ public class JelServiceImpl implements JelServiceProxy {
    */
   @Override
   public void stop() {
-    if (JelService.pluginManager() != null) {
-      JelService.pluginManager().stop();
+    if (JelService.adapterManager() != null) {
+      Future<Void> future = Future.future();
+      future.setHandler(res -> {
+        if (JelService.pluginManager() != null) {
+          JelService.pluginManager().stop();
+        }
+      });
+
+      JelService.adapterManager().stop(future);
     }
   }
 
@@ -146,7 +154,7 @@ public class JelServiceImpl implements JelServiceProxy {
 
     DeliveryOptions options = new DeliveryOptions();
     options.addHeader("action", "listDevices");
-    List<AdapterDesc> adapters = JelService.adapterManager().getAdapters();
+    List<AdapterSettings> adapters = JelService.adapterManager().getAdapters();
     //TODO: If list is empty, call resultHandler.handle(Future.succeededFuture
     adapters.stream().forEach((_item) -> {
       JelService.vertx().eventBus().send(EVENTBUS_ADAPTERS, null, options, res -> {

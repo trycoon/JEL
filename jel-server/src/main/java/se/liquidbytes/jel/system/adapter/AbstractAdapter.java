@@ -17,9 +17,7 @@ package se.liquidbytes.jel.system.adapter;
 
 import io.vertx.core.AbstractVerticle;
 import org.slf4j.Logger;
-import se.liquidbytes.jel.system.JelService;
 import se.liquidbytes.jel.system.plugin.Plugin;
-import se.liquidbytes.jel.system.plugin.PluginException;
 
 /**
  * Base class extended by all adapters
@@ -29,41 +27,9 @@ import se.liquidbytes.jel.system.plugin.PluginException;
 public abstract class AbstractAdapter extends AbstractVerticle implements Plugin {
 
   /**
-   * Namespace for adapters communicating over the eventbus.
-   */
-  public final static String EVENTBUS_ADAPTERS = "jel.eventbus.adapters";
-
-  /**
-   * Namespace for adapter events.
-   */
-  public enum Eventbus_Adapters {
-
-    ADAPTER_STARTED("ADAPTER_STARTED"),
-    ADAPTER_STOPPED("ADAPTER_STOPPED");
-
-    private final String value;
-
-    private Eventbus_Adapters(String value) {
-      this.value = value;
-    }
-  }
-
-  /**
    * Logghandler instance
    */
   private Logger logger;
-
-  /**
-   * Deployment id for this verticle.
-   */
-  private String deploymentId;
-
-  /**
-   * Get unique and human readable name of adapter
-   *
-   * @return Short name
-   */
-  public abstract String getName();
 
   /**
    * Get a more informative description of the adapter, Optional.
@@ -102,12 +68,7 @@ public abstract class AbstractAdapter extends AbstractVerticle implements Plugin
    */
   @Override
   public void pluginStart() {
-    // Register us as a new adapter to adapter manager, it will start up this verticle.
-    try {
-      JelService.adapterManager().registerAdapter(this);
-    } catch (Exception ex) {
-      throw new PluginException(String.format("Failed to start adapter '%s'.", this.getName()), ex);
-    }
+    // By default we do nothing, but derived classes may use this if something need to be run at plugin startup and before this verticle has started.
   }
 
   /**
@@ -115,11 +76,6 @@ public abstract class AbstractAdapter extends AbstractVerticle implements Plugin
    */
   @Override
   public void pluginStop() {
-    // Unregister us from  adapter manager, it will stop up this verticle.
-    try {
-      JelService.adapterManager().unregisterAdapter(this);
-    } catch (Exception ex) {
-      throw new PluginException(String.format("Failed to stop adapter '%s'.", this.getName()), ex);
-    }
+    // By default we do nothing, but derived classes may use this if something need to be run at plugin shutdown and after this verticle has been stopped.
   }
 }

@@ -15,6 +15,7 @@
  */
 package se.liquidbytes.jel.system;
 
+import com.cyngn.vertx.async.promise.PromiseFactory;
 import io.vertx.core.Vertx;
 import se.liquidbytes.jel.system.adapter.AdapterManager;
 import se.liquidbytes.jel.system.plugin.PluginManager;
@@ -27,7 +28,12 @@ import se.liquidbytes.jel.system.plugin.PluginManager;
 public final class JelService {
 
   /**
-   * Vertx instance   *
+   * Namespace of eventbus, used by components that require to talk to JEL-system using its central eventbus.
+   */
+  public final static String EVENTBUS = "jel.eventbus";
+
+  /**
+   * Vertx instance *
    */
   private static Vertx vertx;
 
@@ -40,6 +46,11 @@ public final class JelService {
    * Adapter Manager instance
    */
   private static AdapterManager adapterManager;
+
+  /**
+   * Promise factory instance
+   */
+  private static PromiseFactory promiseFactory;
 
   /*
    * Private constructor, to prevent instances from being created.
@@ -64,6 +75,7 @@ public final class JelService {
    */
   static void vertx(Vertx vertx) {
     JelService.vertx = vertx;
+    promiseFactory = new PromiseFactory(vertx);
   }
 
   /**
@@ -100,5 +112,14 @@ public final class JelService {
    */
   static void adapterManager(AdapterManager adapterManager) {
     JelService.adapterManager = adapterManager;
+  }
+
+  /**
+   * Get promise factory for this vertx instance.
+   *
+   * @return promise factory instance.
+   */
+  public static PromiseFactory promiseFactory() {
+    return promiseFactory;
   }
 }

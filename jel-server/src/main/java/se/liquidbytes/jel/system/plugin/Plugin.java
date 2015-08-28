@@ -15,6 +15,8 @@
  */
 package se.liquidbytes.jel.system.plugin;
 
+import static se.liquidbytes.jel.system.JelService.EVENTBUS;
+
 /**
  * Base interface implemented by all plugins for JEL. Plugins enhance the functionality of JEL, they can add support for additional adapters and devices, they
  * can represent new visual components or add interfaces to third-party softwares. Plugins live in the <tt>plugins</tt> directory of the <tt>storage</tt>
@@ -54,31 +56,17 @@ package se.liquidbytes.jel.system.plugin;
 public interface Plugin {
 
   /**
-   * Namespace of eventbus, used by plugins that require to talk to other plugins and the JEL-system using its central eventbus.
+   * Namespace for communicating plugins events over the eventbus.
    */
-  public final static String EVENTBUS = "jel.eventbus";
+  public final static String EVENTBUS_PLUGINS = EVENTBUS + ".plugins";
 
   /**
-   * Namespace for plugins communicating over the eventbus.
+   * Events
    */
-  public final static String EVENTBUS_PLUGINS = "jel.eventbus.plugins";
-
-  /**
-   * Namespace for plugin events.
-   */
-  public enum Eventbus_Plugins {
-
-    PLUGIN_INSTALLED("PLUGIN_INSTALLED"),
-    PLUGIN_UNINSTALLED("PLUGIN_UNINSTALLED"),
-    PLUGIN_STARTED("PLUGIN_STARTED"),
-    PLUGIN_STOPPED("PLUGIN_STOPPED");
-
-    private final String value;
-
-    private Eventbus_Plugins(String value) {
-      this.value = value;
-    }
-  }
+  public final static String EVENT_PLUGIN_INSTALLED = "PLUGIN_INSTALLED";
+  public final static String EVENT_PLUGIN_UNINSTALLED = "PLUGIN_UNINSTALLED";
+  public final static String EVENT_PLUGIN_STARTED = "PLUGIN_STARTED";
+  public final static String EVENT_PLUGIN_STOPPED = "PLUGIN_STOPPED";
 
   /**
    * Method will be invoked when plugin is installed into the system.

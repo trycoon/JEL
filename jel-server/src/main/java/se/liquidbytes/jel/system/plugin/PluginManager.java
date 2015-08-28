@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.FileSystems;
@@ -50,7 +52,6 @@ import se.liquidbytes.jel.Settings;
 import se.liquidbytes.jel.SystemInfo;
 import se.liquidbytes.jel.system.JelService;
 import static se.liquidbytes.jel.system.plugin.Plugin.EVENTBUS_PLUGINS;
-import se.liquidbytes.jel.system.plugin.Plugin.Eventbus_Plugins;
 
 /**
  * Class that loads and keeps track of all availablePlugins (extensions to JEL).
@@ -159,7 +160,7 @@ public final class PluginManager {
 
         if (plugin != null) {
           plugin.pluginStop();
-          JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, plugin, new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_STOPPED.name()));
+          JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, plugin, new DeliveryOptions().addHeader("action", Plugin.EVENT_PLUGIN_STOPPED));
         }
 
       } catch (Exception ex) {
@@ -410,7 +411,7 @@ public final class PluginManager {
 
         if (newInstalled) {
           pluginInstance.pluginInstall();
-          JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, plugin.getName(), new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_INSTALLED.name()));
+          JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, plugin.getName(), new DeliveryOptions().addHeader("action", Plugin.EVENT_PLUGIN_INSTALLED));
         }
 
         pluginInstance.pluginStart();
@@ -419,8 +420,12 @@ public final class PluginManager {
         this.installedPlugins.put(plugin.getName(), plugin);
         this.loadedPlugins.put(plugin, pluginInstance);
 
-        JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, plugin.getName(), new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_STARTED.name()));
+        JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, plugin.getName(), new DeliveryOptions().addHeader("action", Plugin.EVENT_PLUGIN_STARTED));
 
+        // Special care if plugin is an adapter, register it using the adapter manager.
+        if (plugin.getCategory() == PluginDesc.Category.ADAPTER) {
+          JelService.adapterManager().registerAdapterTypePlugin(plugin);
+        }
       } catch (ClassNotFoundException cnfe) {
         throw new JelException(String.format("Failed to create an instance of the plugin, %s, the mainClass-property('%s') in the descriptionfile may point a non-existing class.", plugin.getDirectoryPath(), plugin.getMainClass()), cnfe);
       } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | SecurityException ex) {
@@ -627,7 +632,8 @@ public final class PluginManager {
    * @param plugin PluginDesc to update
    */
   private void updatePlugin(PluginDesc plugin) {
-
+    //TODO: Implement!
+    throw new UnsupportedOperationException("Not supported yet.");
   }
 
   /**
@@ -645,7 +651,7 @@ public final class PluginManager {
 
         plugin.pluginStop();
         Thread.sleep(500);  // Give it some time to stop.
-        JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, desc.getName(), new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_STOPPED.name()));
+        JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, desc.getName(), new DeliveryOptions().addHeader("action", Plugin.EVENT_PLUGIN_STOPPED));
 
         plugin.pluginUninstall();
       }
@@ -668,7 +674,7 @@ public final class PluginManager {
       FileUtils.deleteDirectory(desc.getDirectoryPath());
 
       logger.info("Plugin '{}' successfully uninstalled.", desc.getName());
-      JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, desc.getName(), new DeliveryOptions().addHeader("action", Eventbus_Plugins.PLUGIN_UNINSTALLED.name()));
+      JelService.vertx().eventBus().publish(EVENTBUS_PLUGINS, desc.getName(), new DeliveryOptions().addHeader("action", Plugin.EVENT_PLUGIN_UNINSTALLED));
 
     } catch (InterruptedException | IOException ex) {
       logger.warn("Failed to uninstall plugin '{}'.", desc.getName(), ex);
@@ -682,6 +688,38 @@ public final class PluginManager {
    */
   public synchronized List<PluginDesc> getInstalledPlugins() {
     return new ArrayList(this.installedPlugins.values());
+  }
+
+  /**
+   * Get list of loaded plugins instances
+   *
+   * @return List of plugins instances.
+   */
+  public synchronized List<PluginDesc> getLoadedPlugins() {
+    return new ArrayList(this.loadedPlugins.values());
+  }
+
+  /**
+   * Get plugin instance from plugin description
+   *
+   * @param desc plugin description
+   * @param copy return a copy of the plugin instance.
+   * @return plugin instance.
+   */
+  public synchronized Plugin getPluginsInstance(PluginDesc desc, boolean copy) {
+    Plugin plugin = this.loadedPlugins.get(desc);
+
+    if (copy) {
+      try {
+        Class<?> c = plugin.getClass();
+        Constructor<?> cons = c.getConstructor();
+        plugin = (Plugin) cons.newInstance();
+      } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException ex) {
+        logger.error("Failed to create a new instance of a plugin.", ex);
+      }
+    }
+
+    return plugin;
   }
 
   public List<Plugin> getAvailablePluginsToInstall() {

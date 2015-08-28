@@ -16,49 +16,56 @@
 package se.liquidbytes.jel.system.adapter;
 
 /**
- * Class holds information about a physical adapter used for communication with devices connected to the adpater.
+ * Class holds information about a physical adapter used for communication with devices connected to the adapter.
  *
  * @author Henrik Östman
  */
-public final class AdapterDesc {
+public final class AdapterSettings {
 
-  private String name;
+  private String type;
   private String address;
   private int port;
 
   /**
+   * Default constructor
+   */
+  public AdapterSettings() {
+    // Nothing here.
+  }
+
+  /**
    * Constructor
    *
-   * @param name Name of adapter
+   * @param type Type of adapter
    * @param address IP-address the adapter is listening to
    * @param port port adapter is listening on
    */
-  public AdapterDesc(String name, String address, int port) {
-    this.setName(name);
+  public AdapterSettings(String type, String address, int port) {
+    this.setType(type);
     this.setAddress(address);
     this.setPort(port);
   }
 
   /**
-   * Name of adapter
+   * Type of adapter, unique but human readable name of adapter
    *
-   * @return the name
+   * @return the type
    */
-  public String getName() {
-    return name;
+  public String getType() {
+    return type;
   }
 
   /**
-   * Name of adapter
+   * Type of adapter, unique but human readable name of adapter
    *
-   * @param name the name to set
+   * @param type the name to set
    */
-  public void setName(String name) {
-    if (name == null || name.trim().length() == 0) {
-      throw new IllegalArgumentException("Not a valid adapter name.");
+  public void setType(String type) {
+    if (type == null || type.trim().length() == 0) {
+      throw new IllegalArgumentException("Not a valid adapter type-name.");
     }
 
-    this.name = name.trim().toLowerCase();
+    this.type = type.trim().toLowerCase();
   }
 
   /**
@@ -71,7 +78,7 @@ public final class AdapterDesc {
   }
 
   /**
-   * Address of adapter
+   * Address of adapter, could be a network TCP/IP address, but also the type of a physical port e.g. "/dev/ttyS0".
    *
    * @param address the address to set
    */
@@ -94,6 +101,7 @@ public final class AdapterDesc {
 
   /**
    * Port of adapter
+   * This is optional, and mostly required by network based adapters.
    *
    * @param port the port to set
    */
