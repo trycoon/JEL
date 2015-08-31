@@ -15,12 +15,15 @@
  */
 package se.liquidbytes.jel.system.adapter;
 
+import io.vertx.core.json.JsonObject;
+import java.util.Objects;
+
 /**
- * Class holds information about a physical adapter used for communication with devices connected to the adapter.
+ * Class holds the configuration for a physical adapter (these are stored in adapters.json).
  *
  * @author Henrik Östman
  */
-public final class AdapterSettings {
+public final class AdapterConfiguration {
 
   private String type;
   private String address;
@@ -29,7 +32,7 @@ public final class AdapterSettings {
   /**
    * Default constructor
    */
-  public AdapterSettings() {
+  public AdapterConfiguration() {
     // Nothing here.
   }
 
@@ -40,7 +43,7 @@ public final class AdapterSettings {
    * @param address IP-address the adapter is listening to
    * @param port port adapter is listening on
    */
-  public AdapterSettings(String type, String address, int port) {
+  public AdapterConfiguration(String type, String address, int port) {
     this.setType(type);
     this.setAddress(address);
     this.setPort(port);
@@ -100,8 +103,7 @@ public final class AdapterSettings {
   }
 
   /**
-   * Port of adapter
-   * This is optional, and mostly required by network based adapters.
+   * Port of adapter This is optional, and mostly required by network based adapters.
    *
    * @param port the port to set
    */
@@ -109,4 +111,45 @@ public final class AdapterSettings {
     this.port = port;
   }
 
+  /**
+   * Information about this object in a public API-friendly way.
+   *
+   * @return Information about this object.
+   */
+  public JsonObject toApi() {
+    JsonObject obj = new JsonObject()
+        .put("type", type)
+        .put("address", type)
+        .put("port", type);
+
+    return obj;
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other == null) {
+      return false;
+    }
+
+    if (other instanceof AdapterConfiguration) {
+      AdapterConfiguration otherConfig = ((AdapterConfiguration) other);
+
+      if (otherConfig.getType().equals(this.getType())
+          && otherConfig.getAddress().equals(this.getAddress())
+          && otherConfig.getPort() == this.getPort()) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  @Override
+  public int hashCode() {
+    int hash = 7;
+    hash = 73 * hash + Objects.hashCode(this.type);
+    hash = 73 * hash + Objects.hashCode(this.address);
+    hash = 73 * hash + this.port;
+    return hash;
+  }
 }

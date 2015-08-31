@@ -97,7 +97,7 @@ public final class JelStarter {
       if (res.failed()) {
         shutdownServer(); // If any of the vertices failed to deploy, shut down the application.
       } else {
-        logger.info("Done deploying verticles.");
+        logger.debug("Done deploying main verticles.");
       }
     });
 

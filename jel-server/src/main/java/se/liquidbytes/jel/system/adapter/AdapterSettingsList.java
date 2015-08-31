@@ -15,8 +15,8 @@
  */
 package se.liquidbytes.jel.system.adapter;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * List of adapters settings, usually loaded and stored to the filesystem ("adapters.json").
@@ -24,13 +24,13 @@ import java.util.List;
  * @author Henrik Östman
  */
 public class AdapterSettingsList {
-  private List<AdapterSettings> settings;
+  private List<AdapterConfiguration> settings;
 
   /**
    * Default constructor.
    */
   public AdapterSettingsList() {
-    settings = new ArrayList<>();
+    settings = new CopyOnWriteArrayList<>();
   }
 
   /**
@@ -38,7 +38,7 @@ public class AdapterSettingsList {
    *
    * @return the settings
    */
-  public List<AdapterSettings> getAdapters() {
+  public List<AdapterConfiguration> getAdapters() {
     return settings;
   }
 
@@ -47,7 +47,7 @@ public class AdapterSettingsList {
    *
    * @param settings the settings to set
    */
-  public void setAdapters(List<AdapterSettings> settings) {
+  public void setAdapters(List<AdapterConfiguration> settings) {
     this.settings = settings;
   }
 }

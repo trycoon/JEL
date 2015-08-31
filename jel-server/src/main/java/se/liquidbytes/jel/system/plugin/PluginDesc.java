@@ -17,6 +17,7 @@ package se.liquidbytes.jel.system.plugin;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import io.vertx.core.json.JsonObject;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -192,7 +193,7 @@ public class PluginDesc {
 
   /**
    * Set the startingpoint of execution of this plugin, it should be the class that takes care of initializing and also shutting down the plugin. The class must
- implement the se.liquidbytes.jel.plugins.PluginDesc-interface.
+   * implement the se.liquidbytes.jel.plugins.PluginDesc-interface.
    *
    * @param mainClass the mainClass to set
    */
@@ -365,7 +366,7 @@ public class PluginDesc {
   /**
    * Validate if all mandatory field are set correctly.
    *
-   * @thros IllegalArgumentException if a field is not set correct.
+   * @throws IllegalArgumentException if a field is not set correct.
    */
   void validate() {
     this.setName(this.getName());
@@ -380,5 +381,28 @@ public class PluginDesc {
     this.setAuthor(this.getAuthor());
     this.setHomepage(this.getHomepage());
     this.setLicence(this.getLicence());
+  }
+
+  /**
+   * Information about this object in a public API-friendly way.
+   *
+   * @return Information about this object.
+   */
+  public JsonObject toApi() {
+    JsonObject obj = new JsonObject()
+        .put("name", this.name)
+        .put("description", this.description)
+        .put("directoryPath", this.directoryPath.toString())
+        .put("originalFile", this.originalFile.toString())
+        .put("fileChecksum", this.fileChecksum)
+        .put("category", this.category.toString())
+        .put("mainClass", this.mainClass)
+        .put("version", this.version)
+        .put("minServerVersion", this.minServerVersion)
+        .put("author", this.author)
+        .put("homepage", this.homepage)
+        .put("license", this.licence);
+
+    return obj;
   }
 }

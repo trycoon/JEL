@@ -15,6 +15,8 @@
  */
 package se.liquidbytes.jel.system.adapter;
 
+import com.cyngn.vertx.async.Latch;
+import com.cyngn.vertx.async.promise.Promise;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
@@ -27,11 +29,11 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.JelException;
@@ -48,7 +50,7 @@ import se.liquidbytes.jel.system.plugin.PluginDesc;
 public final class AdapterManager {
 
   /**
-   * File of all adapterDescriptions. Loaded at applicationstart, and updated every time we add a new AdapterSettings.
+   * File of all adapterDescriptions. Loaded at applicationstart, and updated every time we add a new AdapterConfiguration.
    */
   private final static String ADAPTERS_FILE = "adapters.json";
 
@@ -75,7 +77,7 @@ public final class AdapterManager {
   /**
    * Collection of all adapters.
    */
-  private final Map<String, List<AbstractAdapter>> adapters;  // Adaptertype name as key.
+  private final Map<String, List<DeployedAdapter>> adapters;  // Adaptertype name as key.
 
   /**
    * Collection of all plugins of adapter-type.
@@ -83,14 +85,19 @@ public final class AdapterManager {
   private final Map<String, PluginDesc> adapterTypes; // Adaptertype name as key.
 
   /**
+   * ObjectMapper instance for loading and storing settings-files.
+   */
+  private final ObjectMapper objectMapper;
+
+  /**
    * Collection of settings for adapters.
    */
   private AdapterSettingsList adaptersSettings;
 
   /**
-   * ObjectMapper instance for loading and storing settings-files.
+   * Path to file containing configuration about all adapters that should be loaded (adapters.json).
    */
-  private final ObjectMapper objectMapper;
+  private Path adapterFilePath;
 
   /**
    * Default constructor.
@@ -107,21 +114,21 @@ public final class AdapterManager {
    */
   public void start() {
 
-    Path path = Paths.get(Settings.getStoragePath().toString(), File.separator, ADAPTERS_FILE);
+    adapterFilePath = Paths.get(Settings.getStoragePath().toString(), File.separator, ADAPTERS_FILE);
 
-    if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
-      logger.info("Loading adapters settings from '{}'", path);
+    if (Files.exists(adapterFilePath, LinkOption.NOFOLLOW_LINKS)) {
+      logger.info("Loading adapters settings from '{}'", adapterFilePath);
 
       try {
-        byte[] fileContent = Files.readAllBytes(path);
+        byte[] fileContent = Files.readAllBytes(adapterFilePath);
         adaptersSettings = objectMapper.readValue(fileContent, AdapterSettingsList.class);
       } catch (IOException ex) {
-        throw new JelException(String.format("Failed to load adapters settings from '%s'", path), ex);
+        throw new JelException(String.format("Failed to load adapters settings from '%s'", adapterFilePath), ex);
       }
     } else {
       try {
         // "adapters.json"-file does not exist, so we create it.
-        objectMapper.writeValue(path.toFile(), adaptersSettings);
+        objectMapper.writeValue(adapterFilePath.toFile(), adaptersSettings);
       } catch (IOException ex) {
         throw new JelException(String.format("Failed to create file '%s'.", ADAPTERS_FILE), ex);
       }
@@ -135,9 +142,27 @@ public final class AdapterManager {
    */
   public void stop(Future<Void> stopFuture) {
 
-    if (stopFuture != null) {
-      //TODO: undeploy all adapters and clear list.
-      stopFuture.complete();
+    logger.info("Shutting down adapters and adaptermanager...");
+
+    Latch latch = new Latch(adapters.values().size(), () -> {
+      logger.debug("All adapters stopped.");
+      if (stopFuture != null) {
+        stopFuture.complete();
+      }
+    });
+
+    for (List<DeployedAdapter> adapterType : adapters.values()) {
+      for (DeployedAdapter adapter : adapterType) {
+        JelService.vertx().undeploy(adapter.deploymentId(), res -> {
+          if (res.succeeded()) {
+            logger.info("Stopped verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort());
+          } else {
+            logger.warn("Failed to stop verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort(), res.cause());
+          }
+
+          latch.complete();
+        });
+      }
     }
   }
 
@@ -148,7 +173,7 @@ public final class AdapterManager {
    */
   public List<PluginDesc> getAvailableAdapterTypes() {
     synchronized (adapterTypes) {
-      return new ArrayList(adapterTypes.values());
+      return new CopyOnWriteArrayList(adapterTypes.values());
     }
   }
 
@@ -164,18 +189,9 @@ public final class AdapterManager {
         logger.info("Adding new adaptertype '{}'.", adapterType.getName());
         adapterTypes.put(adapterType.getName(), adapterType);
 
-        JsonObject event = new JsonObject()
-            .put("name", adapterType.getName())
-            .put("description", adapterType.getDescription())
-            .put("version", adapterType.getVersion())
-            .put("author", adapterType.getAuthor())
-            .put("fileChecksum", adapterType.getFileChecksum())
-            .put("homepage", adapterType.getHomepage())
-            .put("license", adapterType.getLicence())
-            .put("path", adapterType.getDirectoryPath().toString());
-        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, event, new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTERTYPE_ADDED));
+        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapterType.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTERTYPE_ADDED));
 
-        startAdapters(adapterType, null);
+        startAdapters(adapterType);
       }
     }
   }
@@ -194,18 +210,9 @@ public final class AdapterManager {
         logger.info("Removing existing adaptertype '{}'.", type.getName());
         adapterTypes.remove(type.getName());
 
-        JsonObject event = new JsonObject()
-            .put("name", type.getName())
-            .put("description", type.getDescription())
-            .put("version", type.getVersion())
-            .put("author", type.getAuthor())
-            .put("fileChecksum", type.getFileChecksum())
-            .put("homepage", type.getHomepage())
-            .put("license", type.getLicence())
-            .put("path", type.getDirectoryPath().toString());
-        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, event, new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTERTYPE_REMOVED));
+        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapterType.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTERTYPE_REMOVED));
 
-        stopAdapters(adapterType, null);
+        stopAdapters(adapterType);
       }
     }
   }
@@ -215,64 +222,116 @@ public final class AdapterManager {
    *
    * @return All adapters
    */
-  public synchronized List<AdapterSettings> getAdapters() {
-    return new ArrayList(adaptersSettings.getAdapters());
-  }
-
-  public void addAdapter(AdapterSettings settings) {
-
-  }
-
-  public void removeAdapter(AdapterSettings settings) {
-
+  public synchronized List<AdapterConfiguration> getAdapters() {
+    return new CopyOnWriteArrayList(adaptersSettings.getAdapters());
   }
 
   /**
-   * Stops verticles for adapter and adaptertypes. We take care of stopping all affected verticles running this/these adapters. Set unused paramters to null.
+   * Add config for and start a new adapter
+   *
+   * @param config config for adapter to start
+   * @throws JelException if failed to add adapter.
+   */
+  public void addAdapter(AdapterConfiguration config) {
+    if (config == null) {
+      throw new JelException("No initialized config provided.");
+    }
+    if (config.getType() == null || config.getType().isEmpty()) {
+      throw new JelException("No adaptertype provided.");
+    }
+    if (config.getAddress() == null || config.getAddress().isEmpty()) {
+      throw new JelException("No adapteraddress provided.");
+    }
+
+    List<AdapterConfiguration> existingAdapters = adaptersSettings.getAdapters();
+
+    if (!existingAdapters.contains(config)) {
+      existingAdapters.add(config);
+
+      try {
+        objectMapper.writeValue(adapterFilePath.toFile(), existingAdapters);
+        startAdapter(config);
+
+        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, config.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_ADDED));
+      } catch (IOException ex) {
+        existingAdapters.remove(config);
+        throw new JelException(String.format("Failed to add adapterconfiguration to %s.", adapterFilePath), ex);
+      }
+    }
+  }
+
+  /**
+   * Remove config for and stopp a existing adapter.
+   *
+   * @param config config for adapter.
+   * @throws JelException if failed to remove adapter.
+   */
+  public void removeAdapter(AdapterConfiguration config) {
+    if (config == null) {
+      throw new JelException("No initialized config provided.");
+    }
+
+    List<AdapterConfiguration> existingAdapters = adaptersSettings.getAdapters();
+
+    if (existingAdapters.contains(config)) {
+      existingAdapters.remove(config);
+
+      try {
+        objectMapper.writeValue(adapterFilePath.toFile(), existingAdapters);
+        stopAdapter(config);
+
+        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, config.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_REMOVED));
+      } catch (IOException ex) {
+        existingAdapters.add(config);
+        throw new JelException(String.format("Failed to removed adapterconfiguration from %s.", adapterFilePath), ex);
+      }
+    }
+  }
+
+  /**
+   * Stops verticles for adaptertype. We take care of stopping all affected verticles running this/these adapters.
    *
    * @param adapterType if a adaptertype (plugin) has been unregistered, pass its plugin description to this method.
-   * @param adapterSettings if a single adapter has been removed then pass its adapterSetting to this method.
    */
-  private void stopAdapters(PluginDesc adapterType, AdapterSettings adapterSettings) {
-    synchronized (adapterTypes) {
-      List<AdapterSettings> settings = adaptersSettings.getAdapters();
+  private void stopAdapters(PluginDesc adapterType) {
+    if (adapterType != null) {
+      List<DeployedAdapter> adapterList = adapters.get(adapterType.getName());
 
-      if (adapterType != null) {
-        // Stop all adapters which adaptertype just has been unregistered.
-
-        List<AbstractAdapter> adapterList = adapters.get(adapterType.getName());
-
-        if (adapterList != null) {
-          for (AbstractAdapter adapter : adapterList) {
-            JelService.vertx().undeploy(adapter.deploymentID(), res -> {
-              if (res.succeeded()) {
-                logger.info("Stopped verticle for adapter '{}'", adapter.config().getString("type"));
-                adapterList.remove(adapter);
-              } else {
-                logger.error("Failed to stop verticle for adapter '{}'", adapter.config().getString("type"), res.cause());
-              }
-            });
-          }
+      if (adapterList != null) {
+        for (DeployedAdapter adapter : adapterList) {
+          JelService.vertx().undeploy(adapter.deploymentId(), res -> {
+            if (res.succeeded()) {
+              adapterList.remove(adapter);
+              logger.info("Stopped verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort());
+              JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STOPPED));
+            } else {
+              logger.error("Failed to stop verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort(), res.cause());
+            }
+          });
         }
       }
+    }
+  }
 
-      if (adapterSettings != null) {
-        // Stop  adapter which just has been removed.
-        for (List<AbstractAdapter> adapterInstances : adapters.values()) {
-          for (AbstractAdapter adapter : adapterInstances) {
-            if (adapter.config().getString("type").equals(adapterSettings.getType())
-                && adapter.config().getString("address").equals(adapterSettings.getAddress())
-                && adapter.config().getInteger("port") == adapterSettings.getPort()) {
-
-              JelService.vertx().undeploy(adapter.deploymentID(), res -> {
-                if (res.succeeded()) {
-                  logger.info("Stopped verticle for adapter '{}'", adapter.config().getString("type"));
-                  adapterInstances.remove(adapter);
-                } else {
-                  logger.error("Failed to stop verticle for adapter '{}'", adapter.config().getString("type"), res.cause());
-                }
-              });
-            }
+  /**
+   * Stops verticle for adapter. We take care of stopping the affected verticle running this adapter.
+   *
+   * @param adapterSettings if a single adapter has been removed then pass its adapterSetting to this method.
+   */
+  private void stopAdapter(AdapterConfiguration adapterSettings) {
+    if (adapterSettings != null) {
+      for (List<DeployedAdapter> adapterInstances : adapters.values()) {
+        for (DeployedAdapter adapter : adapterInstances) {
+          if (adapter.equals(adapterSettings)) {
+            JelService.vertx().undeploy(adapter.deploymentId(), res -> {
+              if (res.succeeded()) {
+                adapterInstances.remove(adapter);
+                logger.info("Stopped verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort());
+                JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STOPPED));
+              } else {
+                logger.error("Failed to stop verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort(), res.cause());
+              }
+            });
           }
         }
       }
@@ -280,42 +339,38 @@ public final class AdapterManager {
   }
 
   /**
-   * Starts verticles for adapter and adaptertypes based upon the available adaptertypes and which adapters that should be running according to the
-   * adapters.json-file.
+   * Starts verticles for adaptertypes based upon the available adaptertypes and which adapters that should be running according to the adapters.json-file.
    *
    * @param adapterType if a adaptertype (plugin) has been registered, pass its plugin description to this method.
-   * @param adapterSettings if a single adapter has been added then pass its adapterSetting to this method.
    */
-  private void startAdapters(PluginDesc adapterType, AdapterSettings adapterSettings) {
-    synchronized (adapterTypes) {
-      List<AdapterSettings> settings = adaptersSettings.getAdapters();
+  private void startAdapters(PluginDesc adapterType) {
+    if (adapterType != null) {
+      List<AdapterConfiguration> configurations = adaptersSettings.getAdapters();
 
-      if (adapterType != null) {
-        // Start all adapters which adaptertype just has been registered.
+      if (!adapters.containsKey(adapterType.getName())) {
+        adapters.put(adapterType.getName(), new CopyOnWriteArrayList<>());
+      }
 
-        if (!adapters.containsKey(adapterType.getName())) {
-          adapters.put(adapterType.getName(), new ArrayList<>());
-        }
+      List<DeployedAdapter> adapterList = adapters.get(adapterType.getName());
 
-        List<AbstractAdapter> adapterList = adapters.get(adapterType.getName());
+      Promise promise = JelService.promiseFactory().create();
 
-        AdapterSettings adapterToStart;
+      for (AdapterConfiguration adapterConfig : configurations) {
 
-        for (AdapterSettings adapterSetting : settings) {
-          adapterToStart = adapterSetting;
+        promise.then((context, onResult) -> {
+          AdapterConfiguration adapterToStart = adapterConfig;
 
-          for (AbstractAdapter adapter : adapterList) {
-            if (adapterSetting.getType().equals(adapter.config().getString("type")) && adapterSetting.getAddress().equals(adapter.config().getString("address")) && adapterSetting.getPort() == adapter.config().getInteger("port")) {
+          for (DeployedAdapter adapter : adapterList) {
+            if (adapter.equals(adapterConfig)) {
               adapterToStart = null;  // An adapter with these settings are already running, so set this variable to not start.
               break;
             }
           }
 
           if (adapterToStart != null) {
-            AbstractAdapter adapterInstance;
 
             try {
-              adapterInstance = (AbstractAdapter) JelService.pluginManager().getPluginsInstance(adapterType, true);
+              AbstractAdapter adapterInstance = (AbstractAdapter) JelService.pluginManager().getPluginsInstance(adapterType, true);
 
               JsonObject config = new JsonObject();
               config.put("type", adapterToStart.getType());          // Name of adaptertype.
@@ -328,68 +383,98 @@ public final class AdapterManager {
               deployOptions.setWorker(true);
 
               JelService.vertx().deployVerticle(adapterInstance, deployOptions, res -> {
-                JsonObject adapterConfig = JelService.vertx().getOrCreateContext().config();
+                AdapterConfiguration deployedConfig = new AdapterConfiguration(config.getString("type"), config.getString("address"), config.getInteger("port"));
 
                 if (res.succeeded()) {
-                  logger.info("Successfully deployed verticle with id: {}, for adapter '{}' using address '{}' and port '{}'.",
-                      res.result(), adapterConfig.getString("type"), adapterConfig.getString("address"), adapterConfig.getInteger("port"));
 
-                  adapterList.add(adapterInstance);
+                  logger.info("Successfully deployed verticle with id: {}, for adapter '{}' using address '{}' and port '{}'.",
+                      res.result(), deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort());
+
+                  DeployedAdapter adapter = new DeployedAdapter();
+                  adapter.deploymentId(res.result());
+                  adapter.config(deployedConfig);
+                  adapter.setPluginDescription(adapterType);
+                  adapterList.add(adapter);
+
+                  JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STARTED));
+                  onResult.accept(true);
                 } else {
                   logger.error("Failed to deploy verticle for adapter '{}' using address '{}' and port '{}'.",
-                      adapterConfig.getString("type"), adapterConfig.getString("address"), adapterConfig.getInteger("port"), res.cause());
+                      deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort(), res.cause());
+                  // Continue deploying other adapters.
+                  onResult.accept(true);
                 }
               });
             } catch (ClassCastException exception) {
               logger.error("Plugin, {}, is said to be a adapter but does not inheritage from AbstractAdapter-class, this must be fixed by plugin developer! Adapter will not be started.", adapterType.getName(), exception);
+              // Continue deploying other adapters.
+              onResult.accept(true);
             }
+          } else {
+            // This adapter is already running so continue deploying other adapters.
+            onResult.accept(true);
           }
-        }
+        });
       }
+      // Start deploying adapters serially.
+      promise.eval();
+    }
+  }
 
-      if (adapterSettings != null) {
-        // Start  adapter which just has been added.
+  /**
+   * Starts verticle for adapter based upon which adapters that should be running according to the adapters.json-file.
+   *
+   * @param adapterConfig configuration of adapter.
+   */
+  private void startAdapter(AdapterConfiguration adapterConfig) {
+    if (adapterConfig != null) {
+      List<AdapterConfiguration> configurations = adaptersSettings.getAdapters();
 
-        Optional<PluginDesc> plugin = JelService.pluginManager().getLoadedPlugins().stream().filter(a -> a.getName().equals(adapterSettings.getType())).findFirst();
-        if (!plugin.isPresent()) {
-          logger.debug("No adaptertype with name '{}' registered yet, skipping this adapter.", adapterSettings.getType());
-        } else {
-          try {
-            AbstractAdapter adapterInstance = (AbstractAdapter) JelService.pluginManager().getPluginsInstance(plugin.get(), true);
+      Optional<PluginDesc> plugin = JelService.pluginManager().getLoadedPlugins().stream().filter(a -> a.getName().equals(adapterConfig.getType())).findFirst();
+      if (!plugin.isPresent()) {
+        logger.debug("No adaptertype with name '{}' registered yet, skipping this adapter.", adapterConfig.getType());
+      } else {
+        try {
+          AbstractAdapter adapterInstance = (AbstractAdapter) JelService.pluginManager().getPluginsInstance(plugin.get(), true);
 
-            JsonObject config = new JsonObject();
-            config.put("type", adapterSettings.getType());          // Name of adaptertype.
-            config.put("address", adapterSettings.getAddress());    // Address of adapter, could be a network TCP/IP address, but also the type of a physical port e.g. "/dev/ttyS0".
-            config.put("port", adapterSettings.getPort());          // Optional port of adapter, most commonly used by networked based adapter.
+          JsonObject config = new JsonObject();
+          config.put("type", adapterConfig.getType());          // Name of adaptertype.
+          config.put("address", adapterConfig.getAddress());    // Address of adapter, could be a network TCP/IP address, but also the type of a physical port e.g. "/dev/ttyS0".
+          config.put("port", adapterConfig.getPort());          // Optional port of adapter, most commonly used by networked based adapter.
 
-            DeploymentOptions deployOptions = new DeploymentOptions();
-            deployOptions.setConfig(config);
-            deployOptions.setInstances(1);
-            deployOptions.setWorker(true);
+          DeploymentOptions deployOptions = new DeploymentOptions();
+          deployOptions.setConfig(config);
+          deployOptions.setInstances(1);
+          deployOptions.setWorker(true);
 
-            JelService.vertx().deployVerticle(adapterInstance, deployOptions, res -> {
-              JsonObject adapterConfig = JelService.vertx().getOrCreateContext().config();
+          JelService.vertx().deployVerticle(adapterInstance, deployOptions, res -> {
+            AdapterConfiguration deployedConfig = new AdapterConfiguration(config.getString("type"), config.getString("address"), config.getInteger("port"));
 
-              if (res.succeeded()) {
-                logger.info("Successfully deployed verticle with id: {}, for adapter '{}' using address '{}' and port '{}'.",
-                    res.result(), adapterConfig.getString("type"), adapterConfig.getString("address"), adapterConfig.getInteger("port"));
+            if (res.succeeded()) {
+              logger.info("Successfully deployed verticle with id: {}, for adapter '{}' using address '{}' and port '{}'.",
+                  res.result(), deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort());
 
-                if (!adapters.containsKey(adapterConfig.getString("type"))) {
-                  adapters.put(adapterConfig.getString("type"), new ArrayList<>());
-                }
-
-                List<AbstractAdapter> adapterList = adapters.get(adapterSettings.getType());
-                adapterList.add(adapterInstance);
-              } else {
-                logger.error("Failed to deploy verticle for adapter '{}' using address '{}' and port '{}'.",
-                    adapterConfig.getString("type"), adapterConfig.getString("address"), adapterConfig.getInteger("port"), res.cause());
+              if (!adapters.containsKey(deployedConfig.getType())) {
+                adapters.put(deployedConfig.getType(), new CopyOnWriteArrayList<>());
               }
-            });
-          } catch (ClassCastException exception) {
-            logger.error("Plugin, {}, is said to be a adapter but does not inheritage from AbstractAdapter-class, this must be fixed by plugin developer! Adapter will not be started.", plugin.get().getName(), exception);
-          }
-        }
 
+              List<DeployedAdapter> adapterList = adapters.get(deployedConfig.getType());
+
+              DeployedAdapter adapter = new DeployedAdapter();
+              adapter.deploymentId(res.result());
+              adapter.config(deployedConfig);
+              adapter.setPluginDescription(plugin.get());
+              adapterList.add(adapter);
+
+              JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STARTED));
+            } else {
+              logger.error("Failed to deploy verticle for adapter '{}' using address '{}' and port '{}'.",
+                  deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort(), res.cause());
+            }
+          });
+        } catch (ClassCastException exception) {
+          logger.error("Plugin, {}, is said to be a adapter but does not inheritage from AbstractAdapter-class, this must be fixed by plugin developer! Adapter will not be started.", plugin.get().getName(), exception);
+        }
       }
     }
   }

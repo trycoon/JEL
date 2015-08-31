@@ -84,6 +84,13 @@ public interface JelServiceProxy {
 
   void uninstallPlugin(String name, Handler<AsyncResult<Void>> resultHandler);
 
+  // Adapters
+  void getAvailableAdapters(Handler<AsyncResult<JsonArray>> resultHandler);
+
+  void addAdapter(JsonObject adapter, Handler<AsyncResult<JsonObject>> resultHandler);
+
+  void removeAdapter(JsonObject adapter, Handler<AsyncResult<JsonObject>> resultHandler);
+
   // Sites
   void createSite(JsonObject site, Handler<AsyncResult<JsonObject>> resultHandler);
 

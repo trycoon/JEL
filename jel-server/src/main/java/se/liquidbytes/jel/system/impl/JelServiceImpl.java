@@ -27,8 +27,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.system.JelService;
 import se.liquidbytes.jel.system.JelServiceProxy;
+import se.liquidbytes.jel.system.adapter.AdapterConfiguration;
 import static se.liquidbytes.jel.system.adapter.AdapterManager.EVENTBUS_ADAPTERS;
-import se.liquidbytes.jel.system.adapter.AdapterSettings;
 import se.liquidbytes.jel.system.plugin.PluginDesc;
 
 /**
@@ -76,16 +76,7 @@ public class JelServiceImpl implements JelServiceProxy {
 
     JsonArray list = new JsonArray();
     plugins.stream().forEach((plugin) -> {
-      list.add(new JsonObject()
-          .put("name", plugin.getName())
-          .put("author", plugin.getAuthor())
-          .put("category", plugin.getCategory().toString())
-          .put("description", plugin.getDescription())
-          .put("checksum", plugin.getFileChecksum())
-          .put("homepage", plugin.getHomepage())
-          .put("license", plugin.getLicence())
-          .put("version", plugin.getVersion())
-      );
+      list.add(plugin.toApi());
     });
 
     resultHandler.handle(Future.succeededFuture(list));
@@ -113,6 +104,22 @@ public class JelServiceImpl implements JelServiceProxy {
 
   @Override
   public void uninstallPlugin(String name, Handler<AsyncResult<Void>> resultHandler) {
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  }
+
+  // Adapters
+  @Override
+  public void getAvailableAdapters(Handler<AsyncResult<JsonArray>> resultHandler) {
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  }
+
+  @Override
+  public void addAdapter(JsonObject adapter, Handler<AsyncResult<JsonObject>> resultHandler) {
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  }
+
+  @Override
+  public void removeAdapter(JsonObject adapter, Handler<AsyncResult<JsonObject>> resultHandler) {
     throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
   }
 
@@ -154,7 +161,7 @@ public class JelServiceImpl implements JelServiceProxy {
 
     DeliveryOptions options = new DeliveryOptions();
     options.addHeader("action", "listDevices");
-    List<AdapterSettings> adapters = JelService.adapterManager().getAdapters();
+    List<AdapterConfiguration> adapters = JelService.adapterManager().getAdapters();
     //TODO: If list is empty, call resultHandler.handle(Future.succeededFuture
     adapters.stream().forEach((_item) -> {
       JelService.vertx().eventBus().send(EVENTBUS_ADAPTERS, null, options, res -> {
@@ -187,4 +194,5 @@ public class JelServiceImpl implements JelServiceProxy {
   public void deleteUnboundDevice(String id, Handler<AsyncResult<Void>> resultHandler) {
     throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
   }
+
 }
