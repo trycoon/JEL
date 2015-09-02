@@ -695,7 +695,7 @@ public final class PluginManager {
    *
    * @return List of plugins instances.
    */
-  public synchronized List<PluginDesc> getLoadedPlugins() {
+  public synchronized List<Plugin> getLoadedPlugins() {
     return new ArrayList(this.loadedPlugins.values());
   }
 

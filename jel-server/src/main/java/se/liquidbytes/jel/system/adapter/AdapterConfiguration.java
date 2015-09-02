@@ -119,8 +119,8 @@ public final class AdapterConfiguration {
   public JsonObject toApi() {
     JsonObject obj = new JsonObject()
         .put("type", type)
-        .put("address", type)
-        .put("port", type);
+        .put("address", address)
+        .put("port", port);
 
     return obj;
   }

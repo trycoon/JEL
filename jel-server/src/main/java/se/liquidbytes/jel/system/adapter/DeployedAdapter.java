@@ -35,7 +35,7 @@ public class DeployedAdapter {
    *
    * @return the deploymentId
    */
-  protected String deploymentId() {
+  public String deploymentId() {
     return deploymentId;
   }
 
@@ -53,7 +53,7 @@ public class DeployedAdapter {
    *
    * @return the config
    */
-  protected AdapterConfiguration config() {
+  public AdapterConfiguration config() {
     return config;
   }
 
@@ -71,7 +71,7 @@ public class DeployedAdapter {
    *
    * @return the pluginDescription
    */
-  protected PluginDesc getPluginDescription() {
+  public PluginDesc getPluginDescription() {
     return pluginDescription;
   }
 
@@ -89,10 +89,12 @@ public class DeployedAdapter {
    *
    * @return Information about this object.
    */
-  protected JsonObject toApi() {
-    JsonObject obj = this.config.toApi();
+  public JsonObject toApi() {
+    JsonObject result = new JsonObject();
+    result.put("config", this.config.toApi());
+    result.put("pluginInformation", this.pluginDescription.toApi());
 
-    return obj;
+    return result;
   }
 
   @Override

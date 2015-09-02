@@ -15,6 +15,7 @@
  */
 package se.liquidbytes.jel.system.impl;
 
+import com.cyngn.vertx.async.promise.Promise;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
@@ -25,10 +26,12 @@ import java.lang.invoke.MethodHandles;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import se.liquidbytes.jel.JelException;
 import se.liquidbytes.jel.system.JelService;
 import se.liquidbytes.jel.system.JelServiceProxy;
 import se.liquidbytes.jel.system.adapter.AdapterConfiguration;
 import static se.liquidbytes.jel.system.adapter.AdapterManager.EVENTBUS_ADAPTERS;
+import se.liquidbytes.jel.system.adapter.DeployedAdapter;
 import se.liquidbytes.jel.system.plugin.PluginDesc;
 
 /**
@@ -70,7 +73,7 @@ public class JelServiceImpl implements JelServiceProxy {
 
   // Plugins
   @Override
-  public void getInstalledPlugins(Handler<AsyncResult<JsonArray>> resultHandler) {
+  public void listInstalledPlugins(Handler<AsyncResult<JsonArray>> resultHandler) {
 
     List<PluginDesc> plugins = JelService.pluginManager().getInstalledPlugins();
 
@@ -83,12 +86,12 @@ public class JelServiceImpl implements JelServiceProxy {
   }
 
   @Override
-  public void getAvailablePluginsToInstall(Handler<AsyncResult<JsonArray>> resultHandler) {
+  public void listAvailablePluginsToInstall(Handler<AsyncResult<JsonArray>> resultHandler) {
     throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
   }
 
   @Override
-  public void getAvailablePluginsToUpdate(Handler<AsyncResult<JsonArray>> resultHandler) {
+  public void listAvailablePluginsToUpdate(Handler<AsyncResult<JsonArray>> resultHandler) {
     throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
   }
 
@@ -109,18 +112,57 @@ public class JelServiceImpl implements JelServiceProxy {
 
   // Adapters
   @Override
-  public void getAvailableAdapters(Handler<AsyncResult<JsonArray>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  public void listAvailableAdapterTypes(Handler<AsyncResult<JsonArray>> resultHandler) {
+    List<PluginDesc> adapterTypes = JelService.adapterManager().getAvailableAdapterTypes();
+
+    JsonArray list = new JsonArray();
+    adapterTypes.stream().forEach((adapterType) -> {
+      list.add(adapterType.toApi());
+    });
+
+    resultHandler.handle(Future.succeededFuture(list));
   }
 
   @Override
-  public void addAdapter(JsonObject adapter, Handler<AsyncResult<JsonObject>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  public void listAdapters(Handler<AsyncResult<JsonArray>> resultHandler) {
+    List<DeployedAdapter> adapters = JelService.adapterManager().getAdapters();
+
+    JsonArray list = new JsonArray();
+    adapters.stream().forEach((adapter) -> {
+      list.add(adapter.toApi());
+    });
+
+    resultHandler.handle(Future.succeededFuture(list));
   }
 
   @Override
-  public void removeAdapter(JsonObject adapter, Handler<AsyncResult<JsonObject>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  public void addAdapter(JsonObject adapter, Handler<AsyncResult<Void>> resultHandler) {
+    try {
+      AdapterConfiguration config = new AdapterConfiguration();
+      config.setType(adapter.getString("type"));
+      config.setAddress(adapter.getString("address"));
+      config.setPort(adapter.getInteger("port"));
+
+      JelService.adapterManager().addAdapter(config);
+      resultHandler.handle(Future.succeededFuture());
+    } catch (IllegalArgumentException | JelException ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
+  }
+
+  @Override
+  public void removeAdapter(JsonObject adapter, Handler<AsyncResult<Void>> resultHandler) {
+    try {
+      AdapterConfiguration config = new AdapterConfiguration();
+      config.setType(adapter.getString("type"));
+      config.setAddress(adapter.getString("address"));
+      config.setPort(adapter.getInteger("port"));
+
+      JelService.adapterManager().removeAdapter(config);
+      resultHandler.handle(Future.succeededFuture());
+    } catch (IllegalArgumentException | JelException ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   // Sites
@@ -161,18 +203,48 @@ public class JelServiceImpl implements JelServiceProxy {
 
     DeliveryOptions options = new DeliveryOptions();
     options.addHeader("action", "listDevices");
-    List<AdapterConfiguration> adapters = JelService.adapterManager().getAdapters();
-    //TODO: If list is empty, call resultHandler.handle(Future.succeededFuture
-    adapters.stream().forEach((_item) -> {
-      JelService.vertx().eventBus().send(EVENTBUS_ADAPTERS, null, options, res -> {
-        if (res.succeeded()) {
-          //TODO: We must wait for alla responses before we call this!!!
-          resultHandler.handle(Future.succeededFuture((JsonArray) res.result().body()));
-        } else {
-          resultHandler.handle(Future.failedFuture(res.cause()));
-        }
+    List<DeployedAdapter> adapters = JelService.adapterManager().getAdapters();
+
+    if (adapters.isEmpty()) {
+      resultHandler.handle(Future.succeededFuture(new JsonArray()));
+    } else {
+      Promise promise = JelService.promiseFactory().create();
+      adapters.stream().forEach((_item) -> {
+        // Send message to all adapters to report back their devices.
+        promise.then((context, onResult) -> {
+          JelService.vertx().eventBus().send(
+              String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, _item.config().getType(), _item.config().getAddress(), _item.config().getPort()),
+              null, options, res -> {
+                if (res.succeeded()) {
+                  // All adapters fills in turn a json-array named "devices".
+                  JsonArray devices = context.getJsonArray("devices");
+                  // If we are the first adapter, create the array.
+                  if (devices == null) {
+                    devices = new JsonArray();
+                  }
+
+                  devices.addAll((JsonArray) res.result().body());
+
+                  context.put("devices", devices);
+                  onResult.accept(true);
+                } else {
+                  context.put("errorMessage", res.cause().toString());
+                  onResult.accept(false);
+                }
+              });
+        });
       });
-    });
+
+      promise.done((onSuccess) -> {
+        // When we are done, all adapters devices should be here.
+        JsonArray devices = onSuccess.getJsonArray("devices");
+
+        //TODO: Figure out which devices that are bound and filter them out from this collection.
+        resultHandler.handle(Future.succeededFuture(devices));
+      }).except((onError) -> {
+        resultHandler.handle(Future.failedFuture(onError.getString("errorMessage")));
+      }).eval();
+    }
   }
 
   @Override

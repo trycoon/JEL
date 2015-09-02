@@ -72,11 +72,11 @@ public interface JelServiceProxy {
   void stop();
 
   // Plugins
-  void getInstalledPlugins(Handler<AsyncResult<JsonArray>> resultHandler);
+  void listInstalledPlugins(Handler<AsyncResult<JsonArray>> resultHandler);
 
-  void getAvailablePluginsToInstall(Handler<AsyncResult<JsonArray>> resultHandler);
+  void listAvailablePluginsToInstall(Handler<AsyncResult<JsonArray>> resultHandler);
 
-  void getAvailablePluginsToUpdate(Handler<AsyncResult<JsonArray>> resultHandler);
+  void listAvailablePluginsToUpdate(Handler<AsyncResult<JsonArray>> resultHandler);
 
   void installPlugins(JsonObject plugins, Handler<AsyncResult<JsonObject>> resultHandler);
 
@@ -85,11 +85,13 @@ public interface JelServiceProxy {
   void uninstallPlugin(String name, Handler<AsyncResult<Void>> resultHandler);
 
   // Adapters
-  void getAvailableAdapters(Handler<AsyncResult<JsonArray>> resultHandler);
+  void listAvailableAdapterTypes(Handler<AsyncResult<JsonArray>> resultHandler);
 
-  void addAdapter(JsonObject adapter, Handler<AsyncResult<JsonObject>> resultHandler);
+  void listAdapters(Handler<AsyncResult<JsonArray>> resultHandler);
 
-  void removeAdapter(JsonObject adapter, Handler<AsyncResult<JsonObject>> resultHandler);
+  void addAdapter(JsonObject adapter, Handler<AsyncResult<Void>> resultHandler);
+
+  void removeAdapter(JsonObject adapter, Handler<AsyncResult<Void>> resultHandler);
 
   // Sites
   void createSite(JsonObject site, Handler<AsyncResult<JsonObject>> resultHandler);

@@ -47,6 +47,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.Settings;
 import se.liquidbytes.jel.SystemInfo;
+import se.liquidbytes.jel.web.api.AdapterApi;
 import se.liquidbytes.jel.web.api.DeviceApi;
 import se.liquidbytes.jel.web.api.PluginApi;
 import se.liquidbytes.jel.web.api.SiteApi;
@@ -73,6 +74,10 @@ public class WebserverVerticle extends AbstractVerticle {
    * Plugin API handler instance
    */
   private PluginApi pluginApi;
+  /**
+   * Adapter API handler instance
+   */
+  private AdapterApi adapterApi;
   /**
    * Site API handler instance
    */
@@ -114,6 +119,7 @@ public class WebserverVerticle extends AbstractVerticle {
     }
 
     pluginApi = new PluginApi(vertx);
+    adapterApi = new AdapterApi(vertx);
     siteApi = new SiteApi(vertx);
     userApi = new UserApi(vertx);
     deviceApi = new DeviceApi(vertx);
@@ -126,6 +132,7 @@ public class WebserverVerticle extends AbstractVerticle {
     server.requestHandler(createRouter()::accept);
     server.listen(result -> {
       if (result.succeeded()) {
+        logger.info(String.format("Jel REST-API now listening on %s port %d.", options.getHost(), options.getPort()));
         future.complete();
       } else {
         future.fail(result.cause());
@@ -288,6 +295,11 @@ public class WebserverVerticle extends AbstractVerticle {
     router.put("/plugins/:name").handler(pluginApi::update);
     router.delete("/plugins/:name").handler(pluginApi::uninstall);
     router.get("/repoplugins/:filter").handler(pluginApi::listRepoPlugins);
+    // Adapter-api
+    router.get("/adaptertypes").handler(adapterApi::listAdaptertypes);
+    router.post("/adapters").handler(adapterApi::add);
+    router.get("/adapters").handler(adapterApi::list);
+    router.delete("/adapters").handler(adapterApi::remove);
     // User-api
     //router.route("/users*").handler(userContextHandler::fromApiToken);
     router.post("/users").handler(userApi::create);

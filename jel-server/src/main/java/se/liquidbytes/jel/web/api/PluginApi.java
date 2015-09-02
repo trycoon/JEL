@@ -45,11 +45,10 @@ public class PluginApi {
   }
 
   public void listInstalled(RoutingContext context) {
-    service.getInstalledPlugins((r) -> {
+    service.listInstalledPlugins((r) -> {
       if (r.succeeded()) {
         context.response().end(r.result().encodePrettily());
       } else {
-        context.response().end(r.result().encodePrettily());
         context.fail(r.cause());
       }
     });
@@ -92,20 +91,18 @@ public class PluginApi {
       context.fail(400);
     } else {
       if (filter.equals("update")) {
-        service.getAvailablePluginsToInstall((r) -> {
+        service.listAvailablePluginsToInstall((r) -> {
           if (r.succeeded()) {
             context.response().end(r.result().encodePrettily());
           } else {
-            context.response().end(r.result().encodePrettily());
             context.fail(r.cause());
           }
         });
       } else {
-        service.getAvailablePluginsToUpdate((r) -> {
+        service.listAvailablePluginsToUpdate((r) -> {
           if (r.succeeded()) {
             context.response().end(r.result().encodePrettily());
           } else {
-            context.response().end(r.result().encodePrettily());
             context.fail(r.cause());
           }
         });

@@ -29,6 +29,8 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -124,6 +126,25 @@ public final class AdapterManager {
         adaptersSettings = objectMapper.readValue(fileContent, AdapterSettingsList.class);
       } catch (IOException ex) {
         throw new JelException(String.format("Failed to load adapters settings from '%s'", adapterFilePath), ex);
+      }
+
+      // Clean list from invalid entries.
+      List<AdapterConfiguration> cleanConfig = new CopyOnWriteArrayList<>();
+      for (AdapterConfiguration config : adaptersSettings.getAdapters()) {
+        if (!cleanConfig.contains(config)
+            && config.getType() != null && !config.getType().isEmpty()
+            && config.getAddress() != null && !config.getAddress().isEmpty()) {
+          cleanConfig.add(config);
+        }
+      }
+      // If lists missmatch in size, then update our config-list and update config-file so that we maybe get a correct one next time.
+      if (adaptersSettings.getAdapters().size() != cleanConfig.size()) {
+        adaptersSettings.setAdapters(cleanConfig);
+        try {
+          objectMapper.writer().withDefaultPrettyPrinter().writeValue(adapterFilePath.toFile(), adaptersSettings);
+        } catch (IOException ex) {
+          throw new JelException(String.format("Failed to save cleaned file '%s'.", ADAPTERS_FILE), ex);
+        }
       }
     } else {
       try {
@@ -222,8 +243,15 @@ public final class AdapterManager {
    *
    * @return All adapters
    */
-  public synchronized List<AdapterConfiguration> getAdapters() {
-    return new CopyOnWriteArrayList(adaptersSettings.getAdapters());
+  public synchronized List<DeployedAdapter> getAdapters() {
+    List<DeployedAdapter> deployedAdapters = new ArrayList<>();
+
+    Iterator<List<DeployedAdapter>> it = adapters.values().iterator();
+    while (it.hasNext()) {
+      deployedAdapters.addAll(it.next());
+    }
+
+    return deployedAdapters;
   }
 
   /**
@@ -248,8 +276,10 @@ public final class AdapterManager {
     if (!existingAdapters.contains(config)) {
       existingAdapters.add(config);
 
+      adaptersSettings.setAdapters(existingAdapters);
+
       try {
-        objectMapper.writeValue(adapterFilePath.toFile(), existingAdapters);
+        objectMapper.writer().withDefaultPrettyPrinter().writeValue(adapterFilePath.toFile(), adaptersSettings);
         startAdapter(config);
 
         JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, config.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_ADDED));
@@ -276,8 +306,10 @@ public final class AdapterManager {
     if (existingAdapters.contains(config)) {
       existingAdapters.remove(config);
 
+      adaptersSettings.setAdapters(existingAdapters);
+
       try {
-        objectMapper.writeValue(adapterFilePath.toFile(), existingAdapters);
+        objectMapper.writer().withDefaultPrettyPrinter().writeValue(adapterFilePath.toFile(), adaptersSettings);
         stopAdapter(config);
 
         JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, config.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_REMOVED));
@@ -344,7 +376,7 @@ public final class AdapterManager {
    * @param adapterType if a adaptertype (plugin) has been registered, pass its plugin description to this method.
    */
   private void startAdapters(PluginDesc adapterType) {
-    if (adapterType != null) {
+    if (adapterType != null && adapterTypes.containsKey(adapterType.getName())) {
       List<AdapterConfiguration> configurations = adaptersSettings.getAdapters();
 
       if (!adapters.containsKey(adapterType.getName())) {
@@ -356,65 +388,68 @@ public final class AdapterManager {
       Promise promise = JelService.promiseFactory().create();
 
       for (AdapterConfiguration adapterConfig : configurations) {
+        // Check that we only try to start adapters in config that are of our requested type.
+        if (adapterConfig.getType().equals(adapterType.getName())) {
+          promise.then((context, onResult) -> {
+            AdapterConfiguration adapterToStart = adapterConfig;
 
-        promise.then((context, onResult) -> {
-          AdapterConfiguration adapterToStart = adapterConfig;
-
-          for (DeployedAdapter adapter : adapterList) {
-            if (adapter.equals(adapterConfig)) {
-              adapterToStart = null;  // An adapter with these settings are already running, so set this variable to not start.
-              break;
+            // Don't try to start the same adapter (same settings) multiple times.
+            for (DeployedAdapter adapter : adapterList) {
+              if (adapter.equals(adapterConfig)) {
+                adapterToStart = null;  // An adapter with these settings are already running, so set this variable to not start.
+                break;
+              }
             }
-          }
 
-          if (adapterToStart != null) {
+            if (adapterToStart != null) {
 
-            try {
-              AbstractAdapter adapterInstance = (AbstractAdapter) JelService.pluginManager().getPluginsInstance(adapterType, true);
+              try {
+                AbstractAdapter adapterInstance = (AbstractAdapter) JelService.pluginManager().getPluginsInstance(adapterType, true);
 
-              JsonObject config = new JsonObject();
-              config.put("type", adapterToStart.getType());          // Name of adaptertype.
-              config.put("address", adapterToStart.getAddress());    // Address of adapter, could be a network TCP/IP address, but also the type of a physical port e.g. "/dev/ttyS0".
-              config.put("port", adapterToStart.getPort());          // Optional port of adapter, most commonly used by networked based adapter.
+                JsonObject config = new JsonObject();
+                config.put("type", adapterToStart.getType());          // Name of adaptertype.
+                config.put("address", adapterToStart.getAddress());    // Address of adapter, could be a network TCP/IP address, but also the type of a physical port e.g. "/dev/ttyS0".
+                config.put("port", adapterToStart.getPort());          // Optional port of adapter, most commonly used by networked based adapter.
 
-              DeploymentOptions deployOptions = new DeploymentOptions();
-              deployOptions.setConfig(config);
-              deployOptions.setInstances(1);
-              deployOptions.setWorker(true);
+                DeploymentOptions deployOptions = new DeploymentOptions();
+                deployOptions.setConfig(config);
+                deployOptions.setInstances(1);
+                deployOptions.setWorker(true);
 
-              JelService.vertx().deployVerticle(adapterInstance, deployOptions, res -> {
-                AdapterConfiguration deployedConfig = new AdapterConfiguration(config.getString("type"), config.getString("address"), config.getInteger("port"));
+                JelService.vertx().deployVerticle(adapterInstance, deployOptions, res -> {
+                  AdapterConfiguration deployedConfig = new AdapterConfiguration(config.getString("type"), config.getString("address"), config.getInteger("port"));
 
-                if (res.succeeded()) {
+                  if (res.succeeded()) {
 
-                  logger.info("Successfully deployed verticle with id: {}, for adapter '{}' using address '{}' and port '{}'.",
-                      res.result(), deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort());
+                    logger.info("Successfully deployed verticle with id: {}, for adapter '{}' using address '{}' and port '{}'.",
+                        res.result(), deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort());
 
-                  DeployedAdapter adapter = new DeployedAdapter();
-                  adapter.deploymentId(res.result());
-                  adapter.config(deployedConfig);
-                  adapter.setPluginDescription(adapterType);
-                  adapterList.add(adapter);
+                    DeployedAdapter adapter = new DeployedAdapter();
+                    adapter.deploymentId(res.result());
+                    adapter.config(deployedConfig);
+                    adapter.setPluginDescription(adapterType);
+                    adapterList.add(adapter);
 
-                  JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STARTED));
-                  onResult.accept(true);
-                } else {
-                  logger.error("Failed to deploy verticle for adapter '{}' using address '{}' and port '{}'.",
-                      deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort(), res.cause());
-                  // Continue deploying other adapters.
-                  onResult.accept(true);
-                }
-              });
-            } catch (ClassCastException exception) {
-              logger.error("Plugin, {}, is said to be a adapter but does not inheritage from AbstractAdapter-class, this must be fixed by plugin developer! Adapter will not be started.", adapterType.getName(), exception);
-              // Continue deploying other adapters.
+                    JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STARTED));
+                    onResult.accept(true);
+                  } else {
+                    logger.error("Failed to deploy verticle for adapter '{}' using address '{}' and port '{}'.",
+                        deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort(), res.cause());
+                    // Continue deploying other adapters.
+                    onResult.accept(true);
+                  }
+                });
+              } catch (ClassCastException exception) {
+                logger.error("Plugin, {}, is said to be a adapter but does not inheritage from AbstractAdapter-class, this must be fixed by plugin developer! Adapter will not be started.", adapterType.getName(), exception);
+                // Continue deploying other adapters.
+                onResult.accept(true);
+              }
+            } else {
+              // This adapter is already running so continue deploying other adapters.
               onResult.accept(true);
             }
-          } else {
-            // This adapter is already running so continue deploying other adapters.
-            onResult.accept(true);
-          }
-        });
+          });
+        }
       }
       // Start deploying adapters serially.
       promise.eval();
@@ -430,7 +465,9 @@ public final class AdapterManager {
     if (adapterConfig != null) {
       List<AdapterConfiguration> configurations = adaptersSettings.getAdapters();
 
-      Optional<PluginDesc> plugin = JelService.pluginManager().getLoadedPlugins().stream().filter(a -> a.getName().equals(adapterConfig.getType())).findFirst();
+      Optional<PluginDesc> plugin = JelService.pluginManager().getInstalledPlugins().stream().filter(
+          a -> a.getName().equals(adapterConfig.getType())
+      ).findFirst();
       if (!plugin.isPresent()) {
         logger.debug("No adaptertype with name '{}' registered yet, skipping this adapter.", adapterConfig.getType());
       } else {
