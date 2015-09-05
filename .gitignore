@@ -1,6 +1,9 @@
 .DS_Store
 .gradle
 .idea
+*.iml
+*.ipr
+*.iws
 .classpath
 .project
 .settings
@@ -17,3 +20,6 @@ test-results
 *.class
 node_modules
 node
+.vertx
+/jel-server/src/main/generated/
+/jel-server/file-uploads/

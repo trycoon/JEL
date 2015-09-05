@@ -1,0 +1,69 @@
+plugins {
+    id 'groovy'
+    id 'eclipse'
+    id 'idea'
+    id 'com.github.johnrengelman.shadow' version '1.2.1'
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'http://oss.sonatype.org/content/repositories/snapshots/' }
+}
+
+version = '1.0.0'
+
+if (!JavaVersion.current().java8Compatible) {
+    throw new IllegalStateException('''A Haiku:
+                                      |  This needs Java 8,
+                                      |  You are using something else,
+                                      |  Refresh. Try again.'''.stripMargin())
+}
+    
+dependencies {
+    
+    // Vert.x standard
+    compile 'io.vertx:vertx-core:3.0.0-milestone6'
+    compile 'io.vertx:vertx-web:3.0.0-milestone6'
+
+    // Handlebars
+    compile 'com.github.jknack:handlebars:2.1.0'
+        
+    compile 'org.codehaus.groovy:groovy-all:2.4.3'
+    testCompile 'junit:junit:4.12'
+}
+
+jar {
+    manifest {
+        attributes("Implementation-Title": "JEL", "Implementation-Version": version)
+    }
+}
+
+shadowJar  {
+    classifier = ''
+    manifest {
+        attributes 'Main-Class': 'io.vertx.core.Starter'
+        attributes 'Main-Verticle': 'java:io.vertx.examples.feeds.verticles.MainVerticle'
+    }
+    mergeServiceFiles {
+        include 'META-INF/services/io.vertx.core.spi.VerticleFactory'
+    }
+    dependencies {
+        exclude(dependency('io.vertx:codegen'))
+        exclude(dependency('junit:junit'))
+        exclude(dependency('org.mvel:mvel2'))
+    }
+    into 'webroot', {
+        from 'webroot'
+    }
+    into 'templates', {
+        from 'templates'
+    }
+}
+
+task start(dependsOn: shadowJar) << {
+    javaexec { main="-jar"; args shadowJar.archivePath }
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.4'
+}
