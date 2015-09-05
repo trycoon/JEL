@@ -25,6 +25,7 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.serviceproxy.ProxyHelper;
 import se.liquidbytes.jel.Settings;
 import se.liquidbytes.jel.system.adapter.AdapterManager;
+import se.liquidbytes.jel.system.device.DeviceManager;
 import se.liquidbytes.jel.system.impl.JelServiceImpl;
 import se.liquidbytes.jel.system.plugin.PluginManager;
 
@@ -45,6 +46,7 @@ public interface JelServiceProxy {
     JelService.vertx(vertx);
     JelService.adapterManager(new AdapterManager());
     JelService.pluginManager(new PluginManager(Settings.getStoragePath().toString()));
+    JelService.deviceManager(new DeviceManager());
     return new JelServiceImpl();
   }
 
@@ -70,6 +72,11 @@ public interface JelServiceProxy {
    */
   @ProxyIgnore
   void stop();
+
+  // System
+  void systemInformation(Handler<AsyncResult<JsonObject>> resultHandler);
+
+  void systemResources(Handler<AsyncResult<JsonObject>> resultHandler);
 
   // Plugins
   void listInstalledPlugins(Handler<AsyncResult<JsonArray>> resultHandler);
@@ -114,4 +121,6 @@ public interface JelServiceProxy {
   void updateUnboundDevice(String id, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler);
 
   void deleteUnboundDevice(String id, Handler<AsyncResult<Void>> resultHandler);
+
+  void listSiteDevices(String id, Handler<AsyncResult<JsonArray>> resultHandler);
 }

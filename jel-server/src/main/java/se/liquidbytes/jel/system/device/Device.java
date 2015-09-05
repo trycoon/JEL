@@ -15,6 +15,8 @@
  */
 package se.liquidbytes.jel.system.device;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import io.vertx.core.json.JsonObject;
 import se.liquidbytes.jel.system.Identifiable;
 
 /**
@@ -206,4 +208,11 @@ public abstract class Device implements Identifiable {
     this.largePresentation = largePresentation;
   }
 
+  /**
+   * Information about this object in a public API-friendly way.
+   *
+   * @return Information about this object.
+   * @throws com.fasterxml.jackson.core.JsonProcessingException
+   */
+  public abstract JsonObject toApi() throws JsonProcessingException;
 }

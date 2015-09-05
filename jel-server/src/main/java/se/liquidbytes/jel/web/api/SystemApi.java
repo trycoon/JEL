@@ -16,8 +16,6 @@
 package se.liquidbytes.jel.web.api;
 
 import io.vertx.core.Vertx;
-import io.vertx.core.http.HttpServerRequest;
-import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import se.liquidbytes.jel.Settings;
 import se.liquidbytes.jel.system.JelServiceProxy;
@@ -26,7 +24,7 @@ import se.liquidbytes.jel.system.JelServiceProxy;
  *
  * @author Henrik Östman
  */
-public class SiteApi {
+public class SystemApi {
 
   private final Vertx vertx;
   private final JelServiceProxy service;
@@ -36,21 +34,13 @@ public class SiteApi {
    *
    * @param vertx Vertx-instance
    */
-  public SiteApi(Vertx vertx) {
+  public SystemApi(Vertx vertx) {
     this.vertx = vertx;
     service = JelServiceProxy.createProxy(this.vertx, Settings.EVENTBUS_NAME);
   }
 
-  public void create(RoutingContext context) {
-    JsonObject body = context.getBodyAsJson();
-    JsonObject user = context.get("user");
-
-    context.response().end("TODO");
-  }
-
-  public void list(RoutingContext context) {
-
-    service.listSites((r) -> {
+  public void systemInformation(RoutingContext context) {
+    service.systemInformation((r) -> {
       if (r.succeeded()) {
         context.response().end(r.result().encodePrettily());
       } else {
@@ -59,22 +49,13 @@ public class SiteApi {
     });
   }
 
-  public void retrieve(RoutingContext context) {
-    HttpServerRequest request = context.request();
-    String siteId = request.getParam("siteId");
-    if (siteId == null) {
-      context.fail(400);
-      return;
-    }
-
-    context.response().end("TODO");
-  }
-
-  public void update(RoutingContext context) {
-    context.response().end("TODO");
-  }
-
-  public void delete(RoutingContext context) {
-    context.response().end("TODO");
+  public void systemResources(RoutingContext context) {
+    service.systemResources((r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
   }
 }

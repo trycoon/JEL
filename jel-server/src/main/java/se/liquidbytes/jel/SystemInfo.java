@@ -123,8 +123,9 @@ public class SystemInfo {
   }
 
   /**
+   * Generate a startup splashscreen with useful information about the system.
    *
-   * @return
+   * @return System information on a long string with lot's of linebreaks.
    */
   public static String getStartupInformation() {
     StringBuilder builder = new StringBuilder();
@@ -142,6 +143,7 @@ public class SystemInfo {
     builder.append("\n");
     builder.append("OS name: ").append(getOsName()).append("\n");
     builder.append("OS architecture: ").append(getOsArchitecture()).append("\n");
+    builder.append("OS description: ").append(getOsDescription()).append("\n");
     builder.append("OS version: ").append(getOsVersion()).append("\n");
     builder.append("Java virtual machine: ").append(getJavaVirtualMachine()).append("\n");
     builder.append("Java vendor: ").append(getJavaVendor()).append("\n");
@@ -159,15 +161,16 @@ public class SystemInfo {
   }
 
   /**
+   * Get useful system information. This information is mostly static (does not change frequently).
    *
-   * @return
+   * @return Document with system information.
    */
   public static JsonObject getSystemInformation() {
-    JsonObject object = new JsonObject();
+    JsonObject info = new JsonObject();
 
-    object.put("applicationVersion", getVersion());
-    object.put("applicationStarttime", GetApplicationStarttime());
-    object.put("serverCurrenttime", System.currentTimeMillis());
+    info.put("applicationVersion", getVersion());
+    info.put("applicationStarttime", GetApplicationStarttime());
+    info.put("serverCurrenttime", System.currentTimeMillis());
 
     JsonObject java = new JsonObject();
     java.put("virtualMachine", getJavaVirtualMachine());
@@ -176,27 +179,21 @@ public class SystemInfo {
     java.put("javaHome", getJavaHome());
     java.put("runtime", getJavaRuntime());
     java.put("specificationName", getJavaSpecificationName());
-    java.put("freeMemory", getJavaFreeMemory());
-    java.put("totalMemory", getJavaTotalMemory());
-    object.put("java", java);
+    info.put("java", java);
 
     JsonObject os = new JsonObject();
     os.put("name", getOsName());
     os.put("architecture", getOsArchitecture());
+    os.put("description", getOsDescription());
     os.put("version", getOsVersion());
-    object.put("os", os);
+    info.put("os", os);
 
     JsonObject hardware = new JsonObject();
     hardware.put("availableCPUs", getAvailableCPUs());
-    hardware.put("memoryFree", getMemoryFree());
-    hardware.put("memoryTotal", getMemoryTotal());
     hardware.put("ipAddress", getIP());
     hardware.put("gatewayAddress", getGatewayIP());
     hardware.put("bogoMIPS", getBogoMIPS());
-    hardware.put("diskFull", getDiskFull());
-    hardware.put("cpuTemperature", getCpuTemperature());
-    hardware.put("loadAverage", getLoadAverage());
-    object.put("hardware", hardware);
+    info.put("hardware", hardware);
 
     if (isRaspberryPi()) {
       JsonObject raspberry = new JsonObject();
@@ -224,7 +221,37 @@ public class SystemInfo {
       hardware.put("raspberry", raspberry);
     }
 
-    return object;
+    return info;
+  }
+
+  /**
+   * Get information about system resources (CPU, memory, disk...). This information DOES change frequently.
+   *
+   * @return Document with information about system resources.
+   */
+  public static JsonObject getSystemResources() {
+    JsonObject resources = new JsonObject();
+
+    JsonObject java = new JsonObject();
+    java.put("freeMemory", getJavaFreeMemory());
+    java.put("totalMemory", getJavaTotalMemory());
+    resources.put("java", java);
+
+    JsonObject memory = new JsonObject();
+    memory.put("free", getMemoryFree());
+    memory.put("total", getMemoryTotal());
+    resources.put("memory", memory);
+
+    JsonObject disk = new JsonObject();
+    disk.put("fullness", getDiskFull());
+    resources.put("disk", disk);
+
+    JsonObject cpu = new JsonObject();
+    cpu.put("temperature", getCpuTemperature());
+    cpu.put("loadAverage", getLoadAverage());
+    resources.put("cpu", cpu);
+
+    return resources;
   }
 
   //--------------------------------------------------------------------------
@@ -260,7 +287,7 @@ public class SystemInfo {
    * @return
    */
   public static String getJavaVersion() {
-    return System.getProperty("java.vm.version");
+    return System.getProperty("java.version");
   }
 
   /**
@@ -378,6 +405,29 @@ public class SystemInfo {
    */
   public static String getOsVersion() {
     return System.getProperty("os.version");
+  }
+
+  /**
+   * Get a human readable description of the operatingsystem.
+   *
+   * @return description
+   */
+  public static String getOsDescription() {
+    String desc = "";
+
+    if (isLinux()) {
+      try {
+        //TODO: Support Windows and Mac.
+        String[] result = ExecUtil.execute("lsb_release -d");
+        if (result != null && result.length > 0) {
+          desc = result[0].split("Description:")[1].trim();  //  Description:	Ubuntu 14.04.2 LTS
+        }
+      } catch (IOException | InterruptedException ex) {
+        //Ignore
+      }
+    }
+
+    return desc;
   }
 
   /**

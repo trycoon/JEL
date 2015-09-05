@@ -18,6 +18,7 @@ package se.liquidbytes.jel.system;
 import com.cyngn.vertx.async.promise.PromiseFactory;
 import io.vertx.core.Vertx;
 import se.liquidbytes.jel.system.adapter.AdapterManager;
+import se.liquidbytes.jel.system.device.DeviceManager;
 import se.liquidbytes.jel.system.plugin.PluginManager;
 
 /**
@@ -46,6 +47,11 @@ public final class JelService {
    * Adapter Manager instance
    */
   private static AdapterManager adapterManager;
+
+  /**
+   * Device Manager instance
+   */
+  private static DeviceManager deviceManager;
 
   /**
    * Promise factory instance
@@ -112,6 +118,24 @@ public final class JelService {
    */
   static void adapterManager(AdapterManager adapterManager) {
     JelService.adapterManager = adapterManager;
+  }
+
+  /**
+   * Get device manager instance.
+   *
+   * @return adapter manager instance.
+   */
+  public static DeviceManager deviceManager() {
+    return deviceManager;
+  }
+
+  /**
+   * Set device manager instance.
+   *
+   * @param adapterManager
+   */
+  static void deviceManager(DeviceManager deviceManager) {
+    JelService.deviceManager = deviceManager;
   }
 
   /**

@@ -15,12 +15,30 @@
  */
 package se.liquidbytes.jel.system.device;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import io.vertx.core.json.JsonObject;
+
 /**
  *
  * @author Henrik Östman
  */
 public class Actuator extends Device {
-    
-    //ACL_Rights [string]("role1", "role2")
 
+  private static final ObjectWriter objectWriter = new ObjectMapper().writer().withDefaultPrettyPrinter();
+
+  /**
+   * Information about this object in a public API-friendly way.
+   *
+   * @return Information about this object.
+   * @throws com.fasterxml.jackson.core.JsonProcessingException
+   */
+  @Override
+  public JsonObject toApi() throws JsonProcessingException {
+    String json = objectWriter.writeValueAsString(this);
+    JsonObject result = new JsonObject(json);
+
+    return result;
+  }
 }

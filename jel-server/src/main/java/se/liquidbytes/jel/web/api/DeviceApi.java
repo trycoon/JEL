@@ -49,14 +49,20 @@ public class DeviceApi {
   }
 
   public void list(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String siteId = request.getParam("siteId");
+    if (siteId == null) {
+      context.fail(400);
+      return;
+    }
 
-    /*service.listSites((r) -> {      if (r.succeeded()) {
-     context.response().end(r.result().encodePrettily());
-     } else {
-     context.response().end(r.result().encodePrettily());
-     context.fail(r.cause());
-     }
-     });*/
+    service.listSiteDevices(siteId, (r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
   }
 
   public void retrieve(RoutingContext context) {

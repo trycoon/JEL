@@ -53,7 +53,6 @@ public class UserApi {
     /*service.listSites((r) -> {      if (r.succeeded()) {
      context.response().end(r.result().encodePrettily());
      } else {
-     context.response().end(r.result().encodePrettily());
      context.fail(r.cause());
      }
      });*/

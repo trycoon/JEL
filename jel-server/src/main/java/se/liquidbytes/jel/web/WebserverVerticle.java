@@ -51,6 +51,7 @@ import se.liquidbytes.jel.web.api.AdapterApi;
 import se.liquidbytes.jel.web.api.DeviceApi;
 import se.liquidbytes.jel.web.api.PluginApi;
 import se.liquidbytes.jel.web.api.SiteApi;
+import se.liquidbytes.jel.web.api.SystemApi;
 import se.liquidbytes.jel.web.api.UserApi;
 
 /**
@@ -70,6 +71,10 @@ public class WebserverVerticle extends AbstractVerticle {
    * Config settings received during deployment
    */
   private JsonObject config;
+  /**
+   * System API handler instance
+   */
+  private SystemApi systemApi;
   /**
    * Plugin API handler instance
    */
@@ -118,6 +123,7 @@ public class WebserverVerticle extends AbstractVerticle {
       return;
     }
 
+    systemApi = new SystemApi(vertx);
     pluginApi = new PluginApi(vertx);
     adapterApi = new AdapterApi(vertx);
     siteApi = new SiteApi(vertx);
@@ -289,6 +295,9 @@ public class WebserverVerticle extends AbstractVerticle {
       con.next();
     });
 
+    // System-api
+    router.get("/system/info").handler(systemApi::systemInformation);
+    router.get("/system/resources").handler(systemApi::systemResources);
     // Plugin-api
     router.post("/plugins").handler(pluginApi::install);
     router.get("/plugins").handler(pluginApi::listInstalled);

@@ -16,6 +16,7 @@
 package se.liquidbytes.jel.system.impl;
 
 import com.cyngn.vertx.async.promise.Promise;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
@@ -27,11 +28,13 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.JelException;
+import se.liquidbytes.jel.SystemInfo;
 import se.liquidbytes.jel.system.JelService;
 import se.liquidbytes.jel.system.JelServiceProxy;
 import se.liquidbytes.jel.system.adapter.AdapterConfiguration;
 import static se.liquidbytes.jel.system.adapter.AdapterManager.EVENTBUS_ADAPTERS;
 import se.liquidbytes.jel.system.adapter.DeployedAdapter;
+import se.liquidbytes.jel.system.device.Device;
 import se.liquidbytes.jel.system.plugin.PluginDesc;
 
 /**
@@ -69,6 +72,17 @@ public class JelServiceImpl implements JelServiceProxy {
 
       JelService.adapterManager().stop(future);
     }
+  }
+
+  // System
+  @Override
+  public void systemInformation(Handler<AsyncResult<JsonObject>> resultHandler) {
+    resultHandler.handle(Future.succeededFuture(SystemInfo.getSystemInformation()));
+  }
+
+  @Override
+  public void systemResources(Handler<AsyncResult<JsonObject>> resultHandler) {
+    resultHandler.handle(Future.succeededFuture(SystemInfo.getSystemResources()));
   }
 
   // Plugins
@@ -200,7 +214,7 @@ public class JelServiceImpl implements JelServiceProxy {
     // 3. Get all devices from all sites.
     // 4. Filter out so only devices in hashmap that don't exists in list of devices from sites are left.
     // 5. Order list after adapter and devicename/id? and return list.
-
+    //TODO: This should be moved to DeviceManager!!!
     DeliveryOptions options = new DeliveryOptions();
     options.addHeader("action", "listDevices");
     List<DeployedAdapter> adapters = JelService.adapterManager().getAdapters();
@@ -218,7 +232,7 @@ public class JelServiceImpl implements JelServiceProxy {
                 if (res.succeeded()) {
                   // All adapters fills in turn a json-array named "devices".
                   JsonArray devices = context.getJsonArray("devices");
-                  // If we are the first adapter, create the array.
+                  // If we are the first adapter to report back, create the array.
                   if (devices == null) {
                     devices = new JsonArray();
                   }
@@ -267,4 +281,23 @@ public class JelServiceImpl implements JelServiceProxy {
     throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
   }
 
+  @Override
+  public void listSiteDevices(String siteId, Handler<AsyncResult<JsonArray>> resultHandler) {
+    try {
+      List<? extends Device> devices = JelService.deviceManager().getSiteDevices(siteId);
+
+      JsonArray list = new JsonArray();
+      devices.stream().forEach((device) -> {
+        try {
+          list.add(device.toApi());
+        } catch (JsonProcessingException ex) {
+          logger.warn(String.format("Fail to serialize device(id=%s, name=%s) to JSON.", device.getId(), device.getName()), ex);
+        }
+      });
+
+      resultHandler.handle(Future.succeededFuture(list));
+    } catch (JelException ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
+  }
 }
