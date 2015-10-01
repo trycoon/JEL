@@ -1,0 +1,10 @@
+{
+ "name": "owfs",
+ "category": "adapter",
+ "version": "1.0.0",
+ "author": "Henrik Östman",
+ "homepage": "somewhere",
+ "minServerVersion": "0.0.1",
+ "mainClass": "se.liquidbytes.jel.owfs.OwfsAdapter",
+ "description": "Adapter for supporting Dallas/Maxim 1-wire system using the open source library OWFS, http://owfs.org/"
+}

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>se.liquidbytes.jel.adapters</groupId>
+  <artifactId>owfs</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <url>https://github.com/trycoon/JEL.git</url>
+
+  <developers>
+    <developer>
+      <id>trycoon</id>
+      <name>Henrik Östman</name>
+      <email>trycoon@gmail.com</email>
+    </developer>
+  </developers>
+  
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+      
+  <scm>
+    <url>https://github.com/trycoon/JEL</url>
+    <connection>scm:git:https://github.com/trycoon/JEL.git</connection>
+    <developerConnection>scm:git:https://github.com/trycoon/JEL.git</developerConnection>
+  </scm>
+  
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+    <vertx.version>3.0.0</vertx.version>
+    <jel.version>1.0.0</jel.version>
+    <slf4j.version>1.7.12</slf4j.version>
+    <jowfsclient.version>1.2.6</jowfsclient.version>
+  </properties>
+    
+  <dependencies>
+    <!-- Make sure that all dependencies provided by JEL-server is scoped as 'provided', to not include unnecessary junk. --> 
+    <dependency>
+      <groupId>se.liquidbytes</groupId>
+      <artifactId>jel-server</artifactId>
+      <version>${jel.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${slf4j.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-core</artifactId>
+      <version>${vertx.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.owfs</groupId>
+      <artifactId>jowfsclient</artifactId>
+      <version>${jowfsclient.version}</version>
+    </dependency>
+  </dependencies>
+  
+  <build>    
+    <finalName>${project.name}</finalName>
+    <plugins>
+      <plugin>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <descriptorRefs>
+            <descriptorRef>jar-with-dependencies</descriptorRef>
+          </descriptorRefs>
+          <appendAssemblyId>false</appendAssemblyId>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
