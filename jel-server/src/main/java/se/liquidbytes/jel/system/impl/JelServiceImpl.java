@@ -237,7 +237,9 @@ public class JelServiceImpl implements JelServiceProxy {
                     devices = new JsonArray();
                   }
 
-                  devices.addAll((JsonArray) res.result().body());
+                  JsonObject result = (JsonObject) res.result().body();
+                  // TODO: we should maybe keep track which adapter returned which device, so in the future we could send a message to a specific device (and then we need to know which adapter that are the owner).
+                  devices.addAll(result.getJsonArray("result"));
 
                   context.put("devices", devices);
                   onResult.accept(true);

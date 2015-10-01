@@ -279,6 +279,17 @@ public final class AdapterManager {
       adaptersSettings.setAdapters(existingAdapters);
 
       try {
+        //TODO: use this instead??
+        /*final JsonObject js = new JsonObject();
+         vertx.fileSystem().readFile("src/main/resources/config.json", result -> {
+          if (result.succeeded()) {
+            Buffer buff = result.result();
+            js.mergeIn(new JsonObject(buff.toString()));
+          } else {
+            System.err.println("Oh oh ..." + result.cause());
+          }
+        });*/
+
         objectMapper.writer().withDefaultPrettyPrinter().writeValue(adapterFilePath.toFile(), adaptersSettings);
         startAdapter(config);
 
@@ -309,6 +320,16 @@ public final class AdapterManager {
       adaptersSettings.setAdapters(existingAdapters);
 
       try {
+//TODO: use this instead??
+       /* final JsonObject js = new JsonObject();
+         vertx.fileSystem().readFile("src/main/resources/config.json", result -> {
+          if (result.succeeded()) {
+            Buffer buff = result.result();
+            js.mergeIn(new JsonObject(buff.toString()));
+          } else {
+            System.err.println("Oh oh ..." + result.cause());
+          }
+        });*/
         objectMapper.writer().withDefaultPrettyPrinter().writeValue(adapterFilePath.toFile(), adaptersSettings);
         stopAdapter(config);
 

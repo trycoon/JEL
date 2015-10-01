@@ -23,6 +23,7 @@ package se.liquidbytes.jel;
 import com.pi4j.system.SystemInfo.BoardType;
 import static com.pi4j.system.SystemInfo.getRevision;
 import com.pi4j.util.ExecUtil;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import java.io.BufferedReader;
 import java.io.File;
@@ -35,6 +36,9 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
@@ -60,7 +64,7 @@ public class SystemInfo {
    * Default constructor. Prevent creating instanses of this class, all access is made through static methods.
    */
   private SystemInfo() {
-    // Nothing
+    // Nothing.
   }
 
   //--------------------------------------------------------------------------
@@ -207,7 +211,13 @@ public class SystemInfo {
       raspberry.put("codecMPG2Enabled", getRaspberryCodecMPG2Enabled());
       raspberry.put("codecWVC1Enabled", getRaspberryCodecWVC1Enabled());
       raspberry.put("cpuArchitecture", getRaspberryCpuArchitecture());
-      raspberry.put("cpuFeatures", getRaspberryCpuFeatures());
+
+      JsonArray features = new JsonArray();
+      for (String feature : getRaspberryCpuFeatures()) {
+        features.add(feature);
+      }
+      raspberry.put("cpuFeatures", features);
+
       raspberry.put("cpuImplementer", getRaspberryCpuImplementer());
       raspberry.put("cpuPart", getRaspberryCpuPart());
       raspberry.put("cpuRevision", getRaspberryCpuRevision());
@@ -370,7 +380,8 @@ public class SystemInfo {
    * @return
    */
   public static boolean isRaspberryPi() {
-    return (getOsName().toLowerCase().contains("raspberrypi"));
+    // TODO: We need a better way!
+    return (isLinux() && Files.exists(Paths.get("/opt/vc/bin/vcgencmd"), LinkOption.NOFOLLOW_LINKS));
   }
 
   /**
@@ -417,7 +428,7 @@ public class SystemInfo {
 
     if (isLinux()) {
       try {
-        //TODO: Support Windows and Mac.
+        //TODO: Support Windows,Mac,Raspberry.
         String[] result = ExecUtil.execute("lsb_release -d");
         if (result != null && result.length > 0) {
           desc = result[0].split("Description:")[1].trim();  //  Description:	Ubuntu 14.04.2 LTS
