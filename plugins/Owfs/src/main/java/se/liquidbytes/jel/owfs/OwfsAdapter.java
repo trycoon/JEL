@@ -23,7 +23,12 @@ import io.vertx.core.json.JsonObject;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.SocketException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.owfs.jowfsclient.Enums;
 import org.owfs.jowfsclient.OwfsConnection;
 import org.owfs.jowfsclient.OwfsConnectionConfig;
@@ -71,9 +76,9 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private long pollHandlerId;
   /**
-   * List of available devices on 1-wire bus.
+   * Device Id to device lookup table.
    */
-  private JsonArray availableDevices;
+  private Map<String, JsonObject> deviceLookup;
   /**
    * Attempt counter
    */
@@ -85,9 +90,14 @@ public class OwfsAdapter extends AbstractAdapter {
   @Override
   public void start() {
     attempts = 0;
-    availableDevices = new JsonArray();
+    deviceLookup = new ConcurrentHashMap<>();
 
     setupOwfsConnection();
+    scanAvailableDevices();
+    // Periodic poll buss for device changes (added/removed).
+    pollHandlerId = vertx.setPeriodic(POLL_DELAY, id -> {
+      scanAvailableDevices();
+    });
 
     // Register this adapter to the eventbus so we could take requests and send notifications.
     // We register this adapter serveral times at different addresses on the eventbus, this is because there could be several instances of the adapter running on different IP-addresses and ports,
@@ -112,10 +122,6 @@ public class OwfsAdapter extends AbstractAdapter {
 
     consumer.completionHandler(res -> {
       if (res.succeeded()) {
-        pollHandlerId = vertx.setPeriodic(POLL_DELAY, id -> {
-          scanAvailableDevices();
-        });
-
         logger.info("Owfs-adapter initialized to owserver running at {}:{}.", this.host, this.port);
       } else {
         logger.error("Failed to start Owserver-adapter, connected to owserver running at {}:{}.", this.host, this.port, res.cause());
@@ -134,9 +140,9 @@ public class OwfsAdapter extends AbstractAdapter {
       pollHandlerId = 0;
     }
 
-    if (availableDevices != null) {
-      availableDevices.clear();
-      availableDevices = null;
+    if (deviceLookup != null) {
+      deviceLookup.clear();
+      deviceLookup = null;
     }
 
     if (this.owfs != null) {
@@ -195,6 +201,9 @@ public class OwfsAdapter extends AbstractAdapter {
       }
 
       logger.debug("Done executing action \"{}\" on Owserver running at {}:{}.", action, this.host, this.port);
+    } catch (DeviceMissingException ex) {
+      logger.info("Trying to perform an action on a non existing device ({}) on Owserver running at {}:{}.", ex.getDeviceId(), this.host, this.port);
+      message.fail(404, ex.getMessage());
     } catch (SocketException ex) {
       if (attempts > MAX_ATTEMPTS) {
         logger.error("Failed to execute action \"{}\" on Owserver running at {}:{}, connection seems down. Done trying to reconnect.", action, this.host, this.port, ex);
@@ -208,7 +217,10 @@ public class OwfsAdapter extends AbstractAdapter {
           handleRequest(message);
         });
       }
-    } catch (Exception ex) {
+    } catch (OwfsException ex) {
+      logger.error("Failed to execute action \"{}\" on Owserver running at {}:{}, got errorcode", action, this.host, this.port, ex.getErrorCode(), ex);
+      message.fail(500, ex.getMessage());
+    } catch (IOException ex) {
       logger.error("Failed to execute action \"{}\" on Owserver running at {}:{}.", action, this.host, this.port, ex);
       message.fail(500, ex.getMessage());
     }
@@ -264,25 +276,48 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private void scanAvailableDevices() {
     try {
-      JsonArray devices = new JsonArray();
+      String deviceId, deviceType, deviceFamily;
+      Set<String> foundDeviceIds = new HashSet<>();
+      JsonObject device;
 
       List<String> owDevices = owfs.listDirectoryAll("/uncached");  // Bypass owservers internal cache, so we are sure we get fresh info.
 
       for (String owDevice : owDevices) {
-        JsonObject device = new JsonObject();
+        deviceId = owfs.read(owDevice + "/id");
+        deviceType = owfs.read(owDevice + "/type");
+        deviceFamily = owfs.read(owDevice + "/family");
+        foundDeviceIds.add(deviceId);
 
-        device.put("family", owfs.read(owDevice + "/family"));
-        device.put("id", owfs.read(owDevice + "/id"));
-        device.put("type", owfs.read(owDevice + "/type"));
+        device = deviceLookup.get(deviceId);
+        // Device not found in existing list, this must be a newly added device. Add it to the collection and broadcast its existence.
+        if (device == null) {
+          if (DeviceDatabase.getDeviceTypeInfo(deviceType) != null) {
+            device = new JsonObject();
+            device.put("id", deviceId);
+            device.put("type", deviceType);
+            device.put("family", deviceFamily);
+            device.put("path", owDevice);
+            device.put("typeInfo", DeviceDatabase.getDeviceTypeInfo(deviceType));
 
-        devices.add(device);
+            deviceLookup.put(deviceId, device);
+
+            logger.info("New device found during scan of Owserver at {}:{}. Id: {}, type: {}, family: {}.", this.host, this.port, deviceId, deviceType, deviceFamily);
+            //TODO: Broadcast new device.
+          } else {
+            logger.info("Found unsupported device type for device with id '{}' on Owserver at {}:{}. Device will be ignored! Please notify developers and provide: type={}, family={}.", deviceId, this.host, this.port, deviceType, deviceFamily);
+          }
+        }
       }
 
-      logger.trace("Scanned and found {} devices on Owserver at {}:{}.", devices.size(), this.host, this.port);
+      // Remove all devices in device list that was no longer found during this scan. They has been disconnected from the 1-wire bus.
+      Set<String> tempSet = new HashSet(deviceLookup.keySet());
+      tempSet.removeAll(foundDeviceIds);
+      for (String removeId : tempSet) {
+        deviceLookup.remove(removeId);
+        logger.info("Device with id: {}, not found after last scan of Owserver at {}:{}. Device has been removed from bus.", removeId, this.host, this.port);
+        //TODO: Broadcast delete device
+      }
 
-      // TODO: Compare(availableDevices and devices) which devices that was added removed since last time and broadcast message on bus for devices added and removed.
-      // TODO: Save hashmap with deviceid(key) and owfs-path(value)  so we could lookup devices later.
-      availableDevices = devices;
     } catch (SocketException ex) {
       logger.warn("Failed to scan Owserver at {}:{} for available devices, connection seems down. Trying to reconnect.", this.host, this.port, ex);
       try {
@@ -303,16 +338,68 @@ public class OwfsAdapter extends AbstractAdapter {
    * @return list of devices.
    */
   private JsonArray getAvailableDevices() {
-    return availableDevices;
+    JsonArray result = new JsonArray();
+
+    List<JsonObject> deviceList = deviceLookup.values().stream().sorted((d1, d2) -> d1.getString("type").compareTo(d2.getString("type"))).collect(Collectors.toList());
+
+    for (JsonObject device : deviceList) {
+      result.add(
+          new JsonObject()
+          .put("id", device.getString("id"))
+          .put("type", device.getString("type"))
+          .put("typeInfo", device.getJsonObject("typeInfo"))
+      );
+    }
+
+    return result;
   }
 
-  private JsonObject getDeviceValue(String deviceId) throws Exception {
-    String value = owfs.read("/uncached/<insert valid ids>");
+  /**
+   * Read value from having device having specified id.
+   *
+   * @param deviceId Id on device
+   * @return device current value.
+   * @throws DeviceMissingException throws exception if specified device does not exist.
+   */
+  private String getDeviceValue(String deviceId) throws DeviceMissingException, IOException, OwfsException {
 
-    return new JsonObject(value);
+    if (deviceId == null || !deviceLookup.containsKey(deviceId)) {
+      throw new DeviceMissingException("Trying to perform a action on a non existing device.", deviceId);
+    }
+
+    String value = null;
+    JsonObject device = deviceLookup.get(deviceId);
+    JsonObject typeInfo = device.getJsonObject("typeInfo");
+
+    // Check if this type of device is readable.
+    if (typeInfo.containsKey("valueReadPath")) {
+      String path = device.getString("path") + typeInfo.getString("valueReadPath");
+      value = owfs.read(path).trim();
+    }
+
+    return value;
   }
 
-  private void setDeviceValue(String deviceId, String value) throws Exception {
-    owfs.write("/uncached/<insert valid ids>", value);
+  /**
+   * Set value on device having specified id.
+   *
+   * @param deviceId Id on device
+   * @param value value to set on device.
+   * @throws DeviceMissingException throws exception if specified device does not exist.
+   */
+  private void setDeviceValue(String deviceId, String value) throws DeviceMissingException, IOException, OwfsException {
+
+    if (deviceId == null || !deviceLookup.containsKey(deviceId)) {
+      throw new DeviceMissingException("Trying to perform a action on a non existing device.", deviceId);
+    }
+
+    JsonObject device = deviceLookup.get(deviceId);
+    JsonObject typeInfo = device.getJsonObject("typeInfo");
+
+    // Check if this type of device is writable.
+    if (typeInfo.containsKey("valueWritePath")) {
+      String path = device.getString("path") + typeInfo.getString("valueWritePath");
+      owfs.write(path, value);
+    }
   }
 }
