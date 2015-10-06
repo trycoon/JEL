@@ -15,6 +15,7 @@
  */
 package se.liquidbytes.jel.owfs;
 
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import java.util.Collections;
 import java.util.List;
@@ -124,7 +125,15 @@ public final class DeviceDatabase {
         .put("valueType", "number")
         .put("minSampleDelay", "1000")
         .put("valueReadPath", "/sensed.ALL")
-        .put("valueWritePath", "/PIO.ALL");
+        .put("valueWritePath", "/PIO.ALL")
+        .put("initCommands",
+            new JsonArray().add(
+                new JsonObject()
+                .put("path", "/strobe")
+                .put("value", "1")
+            )
+        );
+
     db.put(type.getString("typeId"), type);
 
     return db;

@@ -24,10 +24,12 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.SocketException;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 import org.owfs.jowfsclient.Enums;
 import org.owfs.jowfsclient.OwfsConnection;
@@ -297,11 +299,24 @@ public class OwfsAdapter extends AbstractAdapter {
             device.put("type", deviceType);
             device.put("family", deviceFamily);
             device.put("path", owDevice);
-            device.put("typeInfo", DeviceDatabase.getDeviceTypeInfo(deviceType));
+            JsonObject typeInfo = DeviceDatabase.getDeviceTypeInfo(deviceType);
+            device.put("typeInfo", typeInfo);
 
             deviceLookup.put(deviceId, device);
 
             logger.info("New device found during scan of Owserver at {}:{}. Id: {}, type: {}, family: {}.", this.host, this.port, deviceId, deviceType, deviceFamily);
+
+            // For devices that need to be setup in a special state to be usable, run their init commands list when added to list of available devices.
+            if (typeInfo.containsKey("initCommands")) {
+              for (Iterator it = typeInfo.getJsonArray("initCommands").iterator(); it.hasNext();) {
+                JsonObject command = (JsonObject) it.next();
+                String path = device.getString("path") + command.getString("path");
+                logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{}.", path, command.getString("value"), deviceId, this.host, this.port);
+
+                owfs.write(path, command.getString("value"));
+              }
+            }
+
             //TODO: Broadcast new device.
           } else {
             logger.info("Found unsupported device type for device with id '{}' on Owserver at {}:{}. Device will be ignored! Please notify developers and provide: type={}, family={}.", deviceId, this.host, this.port, deviceType, deviceFamily);
@@ -339,7 +354,15 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private JsonArray getAvailableDevices() {
     JsonArray result = new JsonArray();
-
+    try {
+      setDeviceValue("3E4D13000000", "1,0,1,0,1,0,1,0");
+    } catch (DeviceMissingException ex) {
+      java.util.logging.Logger.getLogger(OwfsAdapter.class.getName()).log(Level.SEVERE, null, ex);
+    } catch (IOException ex) {
+      java.util.logging.Logger.getLogger(OwfsAdapter.class.getName()).log(Level.SEVERE, null, ex);
+    } catch (OwfsException ex) {
+      java.util.logging.Logger.getLogger(OwfsAdapter.class.getName()).log(Level.SEVERE, null, ex);
+    }
     List<JsonObject> deviceList = deviceLookup.values().stream().sorted((d1, d2) -> d1.getString("type").compareTo(d2.getString("type"))).collect(Collectors.toList());
 
     for (JsonObject device : deviceList) {
