@@ -103,7 +103,7 @@
     <orientdb.version>2.0.2</orientdb.version>
     <handlebars.version>2.2.2</handlebars.version>
     <log4j.version>2.3</log4j.version>
-    <vertx.version>3.0.0</vertx.version>
+    <vertx.version>3.1.0</vertx.version>
     <groovy.version>2.4.3</groovy.version>
   </properties>
 </project>

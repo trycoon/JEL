@@ -1,4 +1,4 @@
-@GenModule(name = "databaseservice", groupPackageName = "se.liquidbytes.jel")
+@ModuleGen(name = "databaseservice", groupPackage = "se.liquidbytes.jel")
 package se.liquidbytes.jel.database;
 
-import io.vertx.codegen.annotations.GenModule;
+import io.vertx.codegen.annotations.ModuleGen;

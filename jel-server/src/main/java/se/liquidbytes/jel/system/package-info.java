@@ -1,4 +1,4 @@
-@GenModule(name = "jelservice", groupPackageName = "se.liquidbytes.jel")
+@ModuleGen(name = "jelservice", groupPackage = "se.liquidbytes.jel")
 package se.liquidbytes.jel.system;
 // This file is needed for Vert.x Service-Proxy to work.
-import io.vertx.codegen.annotations.GenModule;
+import io.vertx.codegen.annotations.ModuleGen;

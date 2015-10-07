@@ -25,23 +25,17 @@ import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
-import io.vertx.ext.web.Session;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.CookieHandler;
 import io.vertx.ext.web.handler.ErrorHandler;
 import io.vertx.ext.web.handler.FaviconHandler;
+import io.vertx.ext.web.handler.LoggerFormat;
 import io.vertx.ext.web.handler.LoggerHandler;
-import io.vertx.ext.web.handler.LoggerHandler.Format;
 import io.vertx.ext.web.handler.SessionHandler;
 import io.vertx.ext.web.handler.StaticHandler;
-import io.vertx.ext.web.handler.TemplateHandler;
-import io.vertx.ext.web.handler.sockjs.BridgeEvent;
-import io.vertx.ext.web.handler.sockjs.BridgeOptions;
-import io.vertx.ext.web.handler.sockjs.PermittedOptions;
 import io.vertx.ext.web.handler.sockjs.SockJSHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.sstore.SessionStore;
-import io.vertx.ext.web.templ.HandlebarsTemplateEngine;
 import java.lang.invoke.MethodHandles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -176,7 +170,7 @@ public class WebserverVerticle extends AbstractVerticle {
     router.route().failureHandler(ErrorHandler.create(Settings.isDebug())); // Show error details only when running in debug/development-mode
 
     // Log all request.
-    router.route().handler(LoggerHandler.create(Format.SHORT));
+    router.route().handler(LoggerHandler.create(LoggerFormat.SHORT));
 
     if (Settings.get("skipweb").equals("false")) {
       // Serve favicons, https://en.wikipedia.org/wiki/Favicon
@@ -192,15 +186,14 @@ public class WebserverVerticle extends AbstractVerticle {
     router.route().handler(sessionHandler);
 
     // Dynamic pages
-    if (Settings.get("skipweb").equals("false")) {
-      dynamicPages(router);
-    }
+    /*if (Settings.get("skipweb").equals("false")) {      dynamicPages(router);
+    }*/
 
     // API
     router.mountSubRouter("/api", apiRouter());
 
     // SockJS / EventBus
-    router.route("/eventbus/*").handler(eventBusHandler());
+    //router.route("/eventbus/*").handler(eventBusHandler());
 
     //No matcher - MUST be last in routers chain
     router.route().handler(con -> {
@@ -229,12 +222,11 @@ public class WebserverVerticle extends AbstractVerticle {
    * @param router Router to add handler to.
    * @return Router with added handler.
    */
-  private Router dynamicPages(Router router) {
-    HandlebarsTemplateEngine hbsEngine = HandlebarsTemplateEngine.create();
-    hbsEngine.setMaxCacheSize(0); /* no cache since we wan't hot-reload for templates */ //TODO: checkup this setting!
+  /*private Router dynamicPages(Router router) {
+   HandlebarsTemplateEngine hbsEngine = HandlebarsTemplateEngine.create();
+   hbsEngine.setMaxCacheSize(0); /* no cache since we wan't hot-reload for templates */ //TODO: checkup this setting!
 
-    TemplateHandler templateHandler = TemplateHandler.create(hbsEngine);
-    //router.get("/private/*").handler(userContextHandler::fromSession);
+  /* TemplateHandler templateHandler = TemplateHandler.create(hbsEngine);    //router.get("/private/*").handler(userContextHandler::fromSession);
     router.getWithRegex(".+\\.hbs").handler(con -> {
       final Session session = con.session();
       con.data().put("userLogin", session.get("login"));
@@ -244,7 +236,7 @@ public class WebserverVerticle extends AbstractVerticle {
     });
     router.getWithRegex(".+\\.hbs").handler(templateHandler);
     return router;
-  }
+   }*/
 
   /**
    * Set up router for handling REST API-requests.
@@ -353,26 +345,7 @@ public class WebserverVerticle extends AbstractVerticle {
   private SockJSHandler eventBusHandler() {
     SockJSHandler handler = SockJSHandler.create(vertx);
 
-    BridgeOptions options = new BridgeOptions();
-    PermittedOptions permitted = new PermittedOptions(); //TODO: Limit access to certain namespaces!
-    permitted.setAddress("eb-api");
-    options.addOutboundPermitted(permitted);
-
-    handler.bridge(options, event -> {
-
-      // You can also optionally provide a handler like this which will be passed any events that occur on the bridge
-      // You can use this for monitoring or logging, or to change the raw messages in-flight.
-      // It can also be used for fine grained access control.
-      if (event.type() == BridgeEvent.Type.SOCKET_CREATED) {
-        logger.debug("Client connected to eventbus using ip '{}'.", event.socket().remoteAddress());
-      } else if (event.type() == BridgeEvent.Type.SOCKET_CLOSED) {
-        logger.debug("Client with ip '{}' disconnected from eventbus.", event.socket().remoteAddress());
-      }
-
-      // This signals that it's ok to process the event
-      event.complete(true);
-
-    });
+    // TODO: Add new eventbus code for vertx-3.1
 
     return handler;
   }
