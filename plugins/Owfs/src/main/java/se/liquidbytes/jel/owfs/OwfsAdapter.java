@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 import java.util.stream.Collectors;
 import org.owfs.jowfsclient.Enums;
 import org.owfs.jowfsclient.OwfsConnection;
@@ -189,14 +188,13 @@ public class OwfsAdapter extends AbstractAdapter {
     try {
       switch (action) {
         case "listDevices":
-          message.reply(constructReply(getAvailableDevices()));
+          this.getAvailableDevices(message);
           break;
         case "getDeviceValue":
-          message.reply(constructReply(getDeviceValue("")));
+          this.getDeviceValue(message);
           break;
         case "setDeviceValue":
-          setDeviceValue("", "1");
-          message.reply(constructReply("OK"));
+          this.setDeviceValue(message);
           break;
         default:
           logger.info("Received a request for a non-implemented action '{}'. Ignoring action.", action);
@@ -350,19 +348,20 @@ public class OwfsAdapter extends AbstractAdapter {
   /**
    * Returns a list of all available devices on 1-wire bus.
    *
+   * @param message eventbus message.
+   */
+  private void getAvailableDevices(Message message) {
+    message.reply(constructReply(getAvailableDevices()));
+  }
+
+  /**
+   * Returns a list of all available devices on 1-wire bus.
+   *
    * @return list of devices.
    */
   private JsonArray getAvailableDevices() {
     JsonArray result = new JsonArray();
-    try {
-      setDeviceValue("3E4D13000000", "1,0,1,0,1,0,1,0");
-    } catch (DeviceMissingException ex) {
-      java.util.logging.Logger.getLogger(OwfsAdapter.class.getName()).log(Level.SEVERE, null, ex);
-    } catch (IOException ex) {
-      java.util.logging.Logger.getLogger(OwfsAdapter.class.getName()).log(Level.SEVERE, null, ex);
-    } catch (OwfsException ex) {
-      java.util.logging.Logger.getLogger(OwfsAdapter.class.getName()).log(Level.SEVERE, null, ex);
-    }
+
     List<JsonObject> deviceList = deviceLookup.values().stream().sorted((d1, d2) -> d1.getString("type").compareTo(d2.getString("type"))).collect(Collectors.toList());
 
     for (JsonObject device : deviceList) {
@@ -378,7 +377,31 @@ public class OwfsAdapter extends AbstractAdapter {
   }
 
   /**
-   * Read value from having device having specified id.
+   * Read value from device with specified id.
+   *
+   * @param message eventbus message.
+   * @throws DeviceMissingException throws exception if specified device does not exist.
+   */
+  private void getDeviceValue(Message message) throws DeviceMissingException, IOException, OwfsException {
+    // Validate and extract action-specific parameters.
+    if (message.body() == null) {
+      message.fail(400, "Missing parameters.");
+      return;
+    }
+
+    JsonObject params = (JsonObject) message.body();
+    String deviceId = params.getString("deviceId");
+
+    if (deviceId == null || deviceId.isEmpty()) {
+      message.fail(400, "Missing parameter 'deviceId'.");
+      return;
+    }
+
+    message.reply(this.constructReply(this.getDeviceValue(deviceId)));
+  }
+
+  /**
+   * Read value from device with specified id.
    *
    * @param deviceId Id on device
    * @return device current value.
@@ -404,7 +427,36 @@ public class OwfsAdapter extends AbstractAdapter {
   }
 
   /**
-   * Set value on device having specified id.
+   * Set value on device with specified id.
+   *
+   * @param message eventbus message.
+   * @throws DeviceMissingException throws exception if specified device does not exist.
+   */
+  private void setDeviceValue(Message message) throws DeviceMissingException, IOException, OwfsException {
+    // Validate and extract action-specific parameters.
+    if (message.body() == null) {
+      message.fail(400, "Missing parameters.");
+      return;
+    }
+
+    JsonObject params = (JsonObject) message.body();
+    String deviceId = params.getString("deviceId");
+    String value = params.getString("value");
+
+    if (deviceId == null || deviceId.isEmpty()) {
+      message.fail(400, "Missing parameter 'deviceId'.");
+      return;
+    }
+    if (value == null || value.isEmpty()) {
+      message.fail(400, "Missing parameter 'value'.");
+      return;
+    }
+
+    this.setDeviceValue(deviceId, value);
+  }
+
+  /**
+   * Set value on device with specified id.
    *
    * @param deviceId Id on device
    * @param value value to set on device.
