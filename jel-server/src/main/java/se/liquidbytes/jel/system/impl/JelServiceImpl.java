@@ -15,12 +15,10 @@
  */
 package se.liquidbytes.jel.system.impl;
 
-import com.cyngn.vertx.async.promise.Promise;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
-import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import java.lang.invoke.MethodHandles;
@@ -32,7 +30,6 @@ import se.liquidbytes.jel.SystemInfo;
 import se.liquidbytes.jel.system.JelService;
 import se.liquidbytes.jel.system.JelServiceProxy;
 import se.liquidbytes.jel.system.adapter.AdapterConfiguration;
-import static se.liquidbytes.jel.system.adapter.AdapterManager.EVENTBUS_ADAPTERS;
 import se.liquidbytes.jel.system.adapter.DeployedAdapter;
 import se.liquidbytes.jel.system.device.Device;
 import se.liquidbytes.jel.system.plugin.PluginDesc;
@@ -208,59 +205,13 @@ public class JelServiceImpl implements JelServiceProxy {
   // Devices
   @Override
   public void listUnboundDevices(Handler<AsyncResult<JsonArray>> resultHandler) {
-    // TODO:
-    // 1. For every adapter in list of adapters, send a "listDevices"-message.
-    // 2. Collect response from all adapters, and add all devices to one hashmap.
-    // 3. Get all devices from all sites.
-    // 4. Filter out so only devices in hashmap that don't exists in list of devices from sites are left.
-    // 5. Order list after adapter and devicename/id? and return list.
-    //TODO: This should be moved to DeviceManager!!!
-    DeliveryOptions options = new DeliveryOptions();
-    options.addHeader("action", "listDevices");
-    List<DeployedAdapter> adapters = JelService.adapterManager().getAdapters();
-
-    if (adapters.isEmpty()) {
-      resultHandler.handle(Future.succeededFuture(new JsonArray()));
-    } else {
-      Promise promise = JelService.promiseFactory().create();
-      adapters.stream().forEach((_item) -> {
-        // Send message to all adapters to report back their devices.
-        promise.then((context, onResult) -> {
-          JelService.vertx().eventBus().send(
-              String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, _item.config().getType(), _item.config().getAddress(), _item.config().getPort()),
-              null, options, res -> {
-                if (res.succeeded()) {
-                  // All adapters fills in turn a json-array named "devices".
-                  JsonArray devices = context.getJsonArray("devices");
-                  // If we are the first adapter to report back, create the array.
-                  if (devices == null) {
-                    devices = new JsonArray();
-                  }
-
-                  JsonObject result = (JsonObject) res.result().body();
-                  // TODO: we should maybe keep track which adapter returned which device, so in the future we could send a message to a specific device (and then we need to know which adapter that are the owner).
-                  devices.addAll(result.getJsonArray("result"));
-
-                  context.put("devices", devices);
-                  onResult.accept(true);
-                } else {
-                  context.put("errorMessage", res.cause().toString());
-                  onResult.accept(false);
-                }
-              });
-        });
-      });
-
-      promise.done((onSuccess) -> {
-        // When we are done, all adapters devices should be here.
-        JsonArray devices = onSuccess.getJsonArray("devices");
-
-        //TODO: Figure out which devices that are bound and filter them out from this collection.
-        resultHandler.handle(Future.succeededFuture(devices));
-      }).except((onError) -> {
-        resultHandler.handle(Future.failedFuture(onError.getString("errorMessage")));
-      }).eval();
-    }
+    JelService.deviceManager().listUnboundDevices((onResult) -> {
+      if (onResult.succeeded()) {
+        resultHandler.handle(Future.succeededFuture(onResult.result()));
+      } else {
+        resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
+      }
+    });
   }
 
   @Override
@@ -286,7 +237,7 @@ public class JelServiceImpl implements JelServiceProxy {
   @Override
   public void listSiteDevices(String siteId, Handler<AsyncResult<JsonArray>> resultHandler) {
     try {
-      List<? extends Device> devices = JelService.deviceManager().getSiteDevices(siteId);
+      List<? extends Device> devices = JelService.deviceManager().listSiteDevices(siteId);
 
       JsonArray list = new JsonArray();
       devices.stream().forEach((device) -> {
