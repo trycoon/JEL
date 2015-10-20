@@ -55,7 +55,7 @@ public final class DeviceDatabase {
    *
    * @return
    */
-  public List<JsonObject> getSuportedDevicesTypes() {
+  public static List<JsonObject> getSuportedDeviceTypes() {
     return Collections.unmodifiableList(devicesList);
   }
 
@@ -131,6 +131,65 @@ public final class DeviceDatabase {
                 new JsonObject()
                 .put("path", "/strobe")
                 .put("value", "1")
+            )
+        )
+        .put("childDevices",
+            new JsonArray()
+            .add(
+                new JsonObject()
+                .put("idSuffix", "1")
+                .put("name", "port 1")
+                .put("valueReadPath", "/sensed.0")
+                .put("valueWritePath", "/PIO.0")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "2")
+                .put("name", "port 2")
+                .put("valueReadPath", "/sensed.1")
+                .put("valueWritePath", "/PIO.1")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "3")
+                .put("name", "port 3")
+                .put("valueReadPath", "/sensed.2")
+                .put("valueWritePath", "/PIO.2")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "4")
+                .put("name", "port 4")
+                .put("valueReadPath", "/sensed.3")
+                .put("valueWritePath", "/PIO.3")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "5")
+                .put("name", "port 5")
+                .put("valueReadPath", "/sensed.4")
+                .put("valueWritePath", "/PIO.4")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "6")
+                .put("name", "port 6")
+                .put("valueReadPath", "/sensed.5")
+                .put("valueWritePath", "/PIO.5")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "7")
+                .put("name", "port 7")
+                .put("valueReadPath", "/sensed.6")
+                .put("valueWritePath", "/PIO.6")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "8")
+                .put("name", "port 8")
+                .put("valueReadPath", "/sensed.7")
+                .put("valueWritePath", "/PIO.7")
             )
         );
 

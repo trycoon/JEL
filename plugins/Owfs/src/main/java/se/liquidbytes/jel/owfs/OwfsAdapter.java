@@ -15,6 +15,7 @@
  */
 package se.liquidbytes.jel.owfs;
 
+import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.MessageConsumer;
@@ -39,6 +40,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.system.adapter.AbstractAdapter;
 import static se.liquidbytes.jel.system.adapter.AdapterManager.EVENTBUS_ADAPTERS;
+import se.liquidbytes.jel.system.device.DeviceManager;
+import static se.liquidbytes.jel.system.device.DeviceManager.EVENTBUS_DEVICES;
 import se.liquidbytes.jel.system.plugin.PluginException;
 
 /**
@@ -187,6 +190,9 @@ public class OwfsAdapter extends AbstractAdapter {
 
     try {
       switch (action) {
+        case "listSupportedDevices":
+          this.getSupportedDevices(message);
+          break;
         case "listDevices":
           this.getAvailableDevices(message);
           break;
@@ -278,7 +284,8 @@ public class OwfsAdapter extends AbstractAdapter {
     try {
       String deviceId, deviceType, deviceFamily;
       Set<String> foundDeviceIds = new HashSet<>();
-      JsonObject device;
+      EventBus eb = vertx.eventBus();
+      JsonObject device, childDevice, broadcastDevice;
 
       List<String> owDevices = owfs.listDirectoryAll("/uncached");  // Bypass owservers internal cache, so we are sure we get fresh info.
 
@@ -292,32 +299,56 @@ public class OwfsAdapter extends AbstractAdapter {
         // Device not found in existing list, this must be a newly added device. Add it to the collection and broadcast its existence.
         if (device == null) {
           if (DeviceDatabase.getDeviceTypeInfo(deviceType) != null) {
-            device = new JsonObject();
-            device.put("id", deviceId);
-            device.put("type", deviceType);
-            device.put("family", deviceFamily);
-            device.put("path", owDevice);
             JsonObject typeInfo = DeviceDatabase.getDeviceTypeInfo(deviceType);
-            device.put("typeInfo", typeInfo);
 
-            deviceLookup.put(deviceId, device);
-
-            logger.info("New device found during scan of Owserver at {}:{}. Id: {}, type: {}, family: {}.", this.host, this.port, deviceId, deviceType, deviceFamily);
-
-            // For devices that need to be setup in a special state to be usable, run their init commands list when added to list of available devices.
+            // For devices that need to be setup in a special state to be usable, run their init commands when added to list of available devices.
             if (typeInfo.containsKey("initCommands")) {
               for (Iterator it = typeInfo.getJsonArray("initCommands").iterator(); it.hasNext();) {
                 JsonObject command = (JsonObject) it.next();
-                String path = device.getString("path") + command.getString("path");
+                String path = owDevice + command.getString("path");
                 logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{}.", path, command.getString("value"), deviceId, this.host, this.port);
 
                 owfs.write(path, command.getString("value"));
               }
             }
 
-            //TODO: Broadcast new device.
+            device = new JsonObject();
+            device.put("id", deviceId);
+            device.put("type", deviceType);
+            device.put("family", deviceFamily);
+            device.put("path", owDevice);
+            device.put("typeInfo", typeInfo);
+
+            deviceLookup.put(deviceId, device);
+            logger.info("New device found during scan of Owserver at {}:{}. Id: {}, type: {}, family: {}.", this.host, this.port, deviceId, deviceType, deviceFamily);
+
+            broadcastDevice = new JsonObject();
+            device.put("id", deviceId);
+            device.put("type", deviceType);
+            device.put("name", typeInfo.getString("name"));
+            eb.publish(EVENTBUS_DEVICES, broadcastDevice, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICES_ADDED));
+
+            // Check if this device is an container for other "child-devices". In that case, add all the children too, their Id will be <parent#childnumber>.
+            if (typeInfo.containsKey("childDevices")) {
+              for (Iterator it = typeInfo.getJsonArray("childDevices").iterator(); it.hasNext();) {
+                JsonObject childType = (JsonObject) it.next();
+
+                childDevice = new JsonObject();
+                childDevice.put("id", String.format("%s#%s", deviceId, childType.getString("idSuffix")));
+                childDevice.put("type", deviceType);
+                childDevice.put("name", String.format("%s-%s", typeInfo.getString("name"), childType.getString("name")));
+
+                deviceLookup.put(deviceId, childDevice);
+                logger.info("New childdevice for device {} found during scan of Owserver at {}:{}. Id: {}, type: {}, family: {}.", deviceId, this.host, this.port, childDevice.getString("id"), deviceType, deviceFamily);
+
+                broadcastDevice = new JsonObject();
+                broadcastDevice.put("id", childDevice.getString("id"));
+                broadcastDevice.put("name", childDevice.getString("name"));
+                eb.publish(EVENTBUS_DEVICES, broadcastDevice, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICES_ADDED));
+              }
+            }
           } else {
-            logger.info("Found unsupported device type for device with id '{}' on Owserver at {}:{}. Device will be ignored! Please notify developers and provide: type={}, family={}.", deviceId, this.host, this.port, deviceType, deviceFamily);
+            logger.info("Found unsupported devicetype for device with id '{}' on Owserver at {}:{}. Device will be ignored! Please notify developers and provide: type={}, family={}.", deviceId, this.host, this.port, deviceType, deviceFamily);
           }
         }
       }
@@ -328,7 +359,11 @@ public class OwfsAdapter extends AbstractAdapter {
       for (String removeId : tempSet) {
         deviceLookup.remove(removeId);
         logger.info("Device with id: {}, not found after last scan of Owserver at {}:{}. Device has been removed from bus.", removeId, this.host, this.port);
-        //TODO: Broadcast delete device
+
+        broadcastDevice = new JsonObject();
+        broadcastDevice.put("id", removeId);
+        //  broadcastDevice.put("name", childDevice.getString("name"));
+        eb.publish(EVENTBUS_DEVICES, broadcastDevice, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICES_REMOVED));
       }
 
     } catch (SocketException ex) {
@@ -343,6 +378,28 @@ public class OwfsAdapter extends AbstractAdapter {
     } catch (IOException ex) {
       logger.error("Error while trying to scan Owserver at {}:{} for available devices.", this.host, this.port, ex);
     }
+  }
+
+  /**
+   * Returns a list of all supported devices by this adapter.
+   *
+   * @param message eventbus message.
+   */
+  private void getSupportedDevices(Message message) {
+
+    JsonArray result = new JsonArray();
+
+    for (JsonObject device : DeviceDatabase.getSuportedDeviceTypes()) {
+      result.add(
+          new JsonObject()
+          .put("typeId", device.getString("typeId"))
+          .put("name", device.getString("name"))
+          .put("description", device.getString("description"))
+          .put("manufacturer", device.getJsonObject("manufacturer"))
+      );
+    }
+
+    message.reply(constructReply(result));
   }
 
   /**
@@ -423,6 +480,8 @@ public class OwfsAdapter extends AbstractAdapter {
       value = owfs.read(path).trim();
     }
 
+    logger.debug("Read value '{}' from device '{}'.", value, deviceId);
+
     return value;
   }
 
@@ -474,6 +533,9 @@ public class OwfsAdapter extends AbstractAdapter {
     // Check if this type of device is writable.
     if (typeInfo.containsKey("valueWritePath")) {
       String path = device.getString("path") + typeInfo.getString("valueWritePath");
+
+      logger.debug("Write value {} to device '{}'.", value, deviceId);
+
       owfs.write(path, value);
     }
   }
