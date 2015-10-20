@@ -52,6 +52,12 @@ public final class DeviceManager {
   public final static String EVENTBUS_DEVICES = EVENTBUS + ".devices";
 
   /**
+   * Events
+   */
+  public final static String EVENTBUS_DEVICES_ADDED = "DEVICE_ADDED";
+  public final static String EVENTBUS_DEVICES_REMOVED = "DEVICE_REMOVED";
+
+  /**
    * Collection of all devices for a specific site.
    */
   private final Map<String, List<? extends Device>> siteDevices;
@@ -105,6 +111,35 @@ public final class DeviceManager {
     }
 
     return devices;
+  }
+
+  /**
+   * Returns a list of all supported devices for a specific adapter.
+   *
+   * @param id id for adapter to query.
+   * @param resultHandler Promise will give the list of supported devices.
+   */
+  public void listSupportedDevices(String id, Handler<AsyncResult<JsonArray>> resultHandler) {
+
+    DeliveryOptions options = new DeliveryOptions();
+    options.addHeader("action", "listSupportedDevices");
+    DeployedAdapter adapter = JelService.adapterManager().getAdapter(id);
+
+    if (adapter == null) {
+      resultHandler.handle(Future.succeededFuture(new JsonArray()));
+    } else {
+      JelService.vertx().eventBus().send(
+          String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort()),
+          null, options, res -> {
+            if (res.succeeded()) {
+              JsonArray result = (JsonArray) res.result().body();
+
+              resultHandler.handle(Future.succeededFuture(result));
+            } else {
+              resultHandler.handle(Future.failedFuture(res.cause()));
+            }
+          });
+    }
   }
 
   /**

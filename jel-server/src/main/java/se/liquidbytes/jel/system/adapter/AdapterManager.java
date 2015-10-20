@@ -255,6 +255,29 @@ public final class AdapterManager {
   }
 
   /**
+   * Returns adapter with specified id.
+   *
+   * @param id id for requested adapter.
+   * @return Adapter having specified id, or null if none found.
+   */
+  public synchronized DeployedAdapter getAdapter(String id) {
+    DeployedAdapter foundAdapter = null;
+
+    Iterator<List<DeployedAdapter>> adapterTypeFamily = adapters.values().iterator();
+    while (adapterTypeFamily.hasNext() && foundAdapter == null) {
+      Iterator<DeployedAdapter> deployedAdapters = adapterTypeFamily.next().iterator();
+      while (deployedAdapters.hasNext() && foundAdapter == null) {
+        foundAdapter = deployedAdapters.next();
+        if (!foundAdapter.Id().equals(id)) {
+          foundAdapter = null;
+        }
+      }
+    }
+
+    return foundAdapter;
+  }
+
+  /**
    * Add config for and start a new adapter
    *
    * @param config config for adapter to start
@@ -279,17 +302,6 @@ public final class AdapterManager {
       adaptersSettings.setAdapters(existingAdapters);
 
       try {
-        //TODO: use this instead??
-        /*final JsonObject js = new JsonObject();
-         vertx.fileSystem().readFile("src/main/resources/config.json", result -> {
-          if (result.succeeded()) {
-            Buffer buff = result.result();
-            js.mergeIn(new JsonObject(buff.toString()));
-          } else {
-            System.err.println("Oh oh ..." + result.cause());
-          }
-        });*/
-
         objectMapper.writer().withDefaultPrettyPrinter().writeValue(adapterFilePath.toFile(), adaptersSettings);
         startAdapter(config);
 
@@ -302,34 +314,26 @@ public final class AdapterManager {
   }
 
   /**
-   * Remove config for and stopp a existing adapter.
+   * Remove config for and stop a existing adapter.
    *
-   * @param config config for adapter.
+   * @param id id of existing adapter.
    * @throws JelException if failed to remove adapter.
    */
-  public void removeAdapter(AdapterConfiguration config) {
-    if (config == null) {
-      throw new JelException("No initialized config provided.");
+  public void removeAdapter(String id) {
+    if (id == null || id.isEmpty()) {
+      throw new JelException("No id for adapter provided.");
     }
 
-    List<AdapterConfiguration> existingAdapters = adaptersSettings.getAdapters();
+    DeployedAdapter deployedAdapter = this.getAdapter(id);
 
-    if (existingAdapters.contains(config)) {
+    if (deployedAdapter != null) {
+      List<AdapterConfiguration> existingAdapters = adaptersSettings.getAdapters();
+      AdapterConfiguration config = deployedAdapter.config();
       existingAdapters.remove(config);
 
       adaptersSettings.setAdapters(existingAdapters);
 
       try {
-//TODO: use this instead??
-       /* final JsonObject js = new JsonObject();
-         vertx.fileSystem().readFile("src/main/resources/config.json", result -> {
-          if (result.succeeded()) {
-            Buffer buff = result.result();
-            js.mergeIn(new JsonObject(buff.toString()));
-          } else {
-            System.err.println("Oh oh ..." + result.cause());
-          }
-        });*/
         objectMapper.writer().withDefaultPrettyPrinter().writeValue(adapterFilePath.toFile(), adaptersSettings);
         stopAdapter(config);
 
@@ -484,8 +488,6 @@ public final class AdapterManager {
    */
   private void startAdapter(AdapterConfiguration adapterConfig) {
     if (adapterConfig != null) {
-      List<AdapterConfiguration> configurations = adaptersSettings.getAdapters();
-
       Optional<PluginDesc> plugin = JelService.pluginManager().getInstalledPlugins().stream().filter(
           a -> a.getName().equals(adapterConfig.getType())
       ).findFirst();

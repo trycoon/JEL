@@ -74,26 +74,37 @@ public class JelServiceImpl implements JelServiceProxy {
   // System
   @Override
   public void systemInformation(Handler<AsyncResult<JsonObject>> resultHandler) {
-    resultHandler.handle(Future.succeededFuture(SystemInfo.getSystemInformation()));
+    try {
+      resultHandler.handle(Future.succeededFuture(SystemInfo.getSystemInformation()));
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   @Override
   public void systemResources(Handler<AsyncResult<JsonObject>> resultHandler) {
-    resultHandler.handle(Future.succeededFuture(SystemInfo.getSystemResources()));
+    try {
+      resultHandler.handle(Future.succeededFuture(SystemInfo.getSystemResources()));
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   // Plugins
   @Override
   public void listInstalledPlugins(Handler<AsyncResult<JsonArray>> resultHandler) {
+    try {
+      List<PluginDesc> plugins = JelService.pluginManager().getInstalledPlugins();
 
-    List<PluginDesc> plugins = JelService.pluginManager().getInstalledPlugins();
+      JsonArray list = new JsonArray();
+      plugins.stream().forEach((plugin) -> {
+        list.add(plugin.toApi());
+      });
 
-    JsonArray list = new JsonArray();
-    plugins.stream().forEach((plugin) -> {
-      list.add(plugin.toApi());
-    });
-
-    resultHandler.handle(Future.succeededFuture(list));
+      resultHandler.handle(Future.succeededFuture(list));
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   @Override
@@ -124,26 +135,48 @@ public class JelServiceImpl implements JelServiceProxy {
   // Adapters
   @Override
   public void listAvailableAdapterTypes(Handler<AsyncResult<JsonArray>> resultHandler) {
-    List<PluginDesc> adapterTypes = JelService.adapterManager().getAvailableAdapterTypes();
+    try {
+      List<PluginDesc> adapterTypes = JelService.adapterManager().getAvailableAdapterTypes();
 
-    JsonArray list = new JsonArray();
-    adapterTypes.stream().forEach((adapterType) -> {
-      list.add(adapterType.toApi());
-    });
+      JsonArray list = new JsonArray();
+      adapterTypes.stream().forEach((adapterType) -> {
+        list.add(adapterType.toApi());
+      });
 
-    resultHandler.handle(Future.succeededFuture(list));
+      resultHandler.handle(Future.succeededFuture(list));
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   @Override
   public void listAdapters(Handler<AsyncResult<JsonArray>> resultHandler) {
-    List<DeployedAdapter> adapters = JelService.adapterManager().getAdapters();
+    try {
+      List<DeployedAdapter> adapters = JelService.adapterManager().getAdapters();
 
-    JsonArray list = new JsonArray();
-    adapters.stream().forEach((adapter) -> {
-      list.add(adapter.toApi());
-    });
+      JsonArray list = new JsonArray();
+      adapters.stream().forEach((adapter) -> {
+        list.add(adapter.toApi());
+      });
 
-    resultHandler.handle(Future.succeededFuture(list));
+      resultHandler.handle(Future.succeededFuture(list));
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
+  }
+
+  @Override
+  public void retrieveAdapter(String id, Handler<AsyncResult<JsonObject>> resultHandler) {
+    try {
+      DeployedAdapter adapter = JelService.adapterManager().getAdapter(id);
+      if (adapter != null) {
+        resultHandler.handle(Future.succeededFuture(adapter.toApi()));
+      } else {
+        resultHandler.handle(Future.succeededFuture(null));
+      }
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   @Override
@@ -162,14 +195,9 @@ public class JelServiceImpl implements JelServiceProxy {
   }
 
   @Override
-  public void removeAdapter(JsonObject adapter, Handler<AsyncResult<Void>> resultHandler) {
+  public void removeAdapter(String id, Handler<AsyncResult<Void>> resultHandler) {
     try {
-      AdapterConfiguration config = new AdapterConfiguration();
-      config.setType(adapter.getString("type"));
-      config.setAddress(adapter.getString("address"));
-      config.setPort(adapter.getInteger("port"));
-
-      JelService.adapterManager().removeAdapter(config);
+      JelService.adapterManager().removeAdapter(id);
       resultHandler.handle(Future.succeededFuture());
     } catch (IllegalArgumentException | JelException ex) {
       resultHandler.handle(Future.failedFuture(ex.getMessage()));
@@ -204,14 +232,33 @@ public class JelServiceImpl implements JelServiceProxy {
 
   // Devices
   @Override
+  public void listSupportedDevices(String id, Handler<AsyncResult<JsonArray>> resultHandler) {
+    try {
+      JelService.deviceManager().listSupportedDevices(id, (onResult) -> {
+        if (onResult.succeeded()) {
+          resultHandler.handle(Future.succeededFuture(onResult.result()));
+        } else {
+          resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
+        }
+      });
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
+  }
+
+  @Override
   public void listUnboundDevices(Handler<AsyncResult<JsonArray>> resultHandler) {
-    JelService.deviceManager().listUnboundDevices((onResult) -> {
-      if (onResult.succeeded()) {
-        resultHandler.handle(Future.succeededFuture(onResult.result()));
-      } else {
-        resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
-      }
-    });
+    try {
+      JelService.deviceManager().listUnboundDevices((onResult) -> {
+        if (onResult.succeeded()) {
+          resultHandler.handle(Future.succeededFuture(onResult.result()));
+        } else {
+          resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
+        }
+      });
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   @Override

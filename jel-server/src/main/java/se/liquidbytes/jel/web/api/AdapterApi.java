@@ -16,6 +16,7 @@
 package se.liquidbytes.jel.web.api;
 
 import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import se.liquidbytes.jel.Settings;
@@ -72,10 +73,32 @@ public class AdapterApi {
     });
   }
 
-  public void remove(RoutingContext context) {
-    JsonObject config = context.getBodyAsJson();
+  public void retrieve(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String adapterId = request.getParam("adapterId");
+    if (adapterId == null) {
+      context.fail(400);
+      return;
+    }
 
-    service.removeAdapter(config, (r) -> {
+    service.retrieveAdapter(adapterId, (r) -> {
+      if (r.succeeded()) {
+        context.response().end();
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void remove(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String adapterId = request.getParam("adapterId");
+    if (adapterId == null) {
+      context.fail(400);
+      return;
+    }
+
+    service.removeAdapter(adapterId, (r) -> {
       if (r.succeeded()) {
         context.response().end();
       } else {

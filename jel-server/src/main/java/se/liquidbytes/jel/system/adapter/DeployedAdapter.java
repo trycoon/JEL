@@ -25,7 +25,7 @@ import se.liquidbytes.jel.system.plugin.PluginDesc;
  * @author Henrik Östman
  */
 public class DeployedAdapter {
-
+  private String id;
   private String deploymentId;
   private AdapterConfiguration config;
   private PluginDesc pluginDescription;
@@ -37,6 +37,15 @@ public class DeployedAdapter {
    */
   public String deploymentId() {
     return deploymentId;
+  }
+
+  /**
+   * Returns a unique adapter id for this adapter. Could only be called upon after config(config) has been run!
+   *
+   * @return the adapter id.
+   */
+  public String Id() {
+    return id;
   }
 
   /**
@@ -64,6 +73,7 @@ public class DeployedAdapter {
    */
   protected void config(AdapterConfiguration config) {
     this.config = config;
+    this.id = String.valueOf(this.hashCode());
   }
 
   /**
@@ -91,6 +101,7 @@ public class DeployedAdapter {
    */
   public JsonObject toApi() {
     JsonObject result = new JsonObject();
+    result.put("id", this.id);
     result.put("config", this.config.toApi());
     result.put("pluginInformation", this.pluginDescription.toApi());
 

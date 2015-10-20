@@ -96,9 +96,11 @@ public interface JelServiceProxy {
 
   void listAdapters(Handler<AsyncResult<JsonArray>> resultHandler);
 
+  void retrieveAdapter(String id, Handler<AsyncResult<JsonObject>> resultHandler);
+
   void addAdapter(JsonObject adapter, Handler<AsyncResult<Void>> resultHandler);
 
-  void removeAdapter(JsonObject adapter, Handler<AsyncResult<Void>> resultHandler);
+  void removeAdapter(String id, Handler<AsyncResult<Void>> resultHandler);
 
   // Sites
   void createSite(JsonObject site, Handler<AsyncResult<JsonObject>> resultHandler);
@@ -113,6 +115,8 @@ public interface JelServiceProxy {
 
   // Devices
   void createUnboundDevice(JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler);
+
+  void listSupportedDevices(String id, Handler<AsyncResult<JsonArray>> resultHandler);
 
   void listUnboundDevices(Handler<AsyncResult<JsonArray>> resultHandler);
 

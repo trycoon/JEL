@@ -98,6 +98,23 @@ public class DeviceApi {
     });
   }
 
+  public void listSupportedDevices(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String adapterId = request.getParam("adapterId");
+    if (adapterId == null) {
+      context.fail(400);
+      return;
+    }
+
+    service.listSupportedDevices(adapterId, (r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
   public void retrieveUnboundDevice(RoutingContext context) {
     context.response().end("TODO");
   }

@@ -300,7 +300,9 @@ public class WebserverVerticle extends AbstractVerticle {
     router.get("/adaptertypes").handler(adapterApi::listAdaptertypes);
     router.post("/adapters").handler(adapterApi::add);
     router.get("/adapters").handler(adapterApi::list);
-    router.delete("/adapters").handler(adapterApi::remove);
+    router.get("/adapters/:adapterId").handler(adapterApi::retrieve);
+    router.delete("/adapters/:adapterId").handler(adapterApi::remove);
+    router.get("/adapters/:adapterId/supportedDevices").handler(deviceApi::listSupportedDevices);
     // User-api
     //router.route("/users*").handler(userContextHandler::fromApiToken);
     router.post("/users").handler(userApi::create);
