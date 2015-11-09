@@ -41,6 +41,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -55,7 +56,7 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 public class SystemInfo {
 
   private final static String VERSION_FILE = "VERSION";
-  private final static long uptimeStart = System.currentTimeMillis();
+  private final static String uptimeStart = LocalDateTime.now().toString();
   // Cache some frequent used information.
   private static Map<String, String> cpuInfo;
   private static String jelVersion;
@@ -120,9 +121,9 @@ public class SystemInfo {
   /**
    * Get epoc-timestamp on application start.
    *
-   * @return timestamp in milliseconds.
+   * @return readable datetime string.
    */
-  public static long GetApplicationStarttime() {
+  public static String GetApplicationStarttime() {
     return uptimeStart;
   }
 

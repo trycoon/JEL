@@ -50,6 +50,15 @@ public final class AdapterConfiguration {
   }
 
   /**
+   * Constructor
+   *
+   * @param config configuration
+   */
+  public AdapterConfiguration(JsonObject config) {
+    this(config.getString("type"), config.getString("address"), config.getInteger("port"));
+  }
+
+  /**
    * Type of adapter, unique but human readable name of adapter
    *
    * @return the type

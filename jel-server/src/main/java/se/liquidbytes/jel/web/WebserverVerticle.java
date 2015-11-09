@@ -22,6 +22,7 @@ import io.vertx.core.Vertx;
 import static io.vertx.core.http.HttpHeaders.CONTENT_TYPE;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -187,14 +188,12 @@ public class WebserverVerticle extends AbstractVerticle {
 
     // Dynamic pages
     /*if (Settings.get("skipweb").equals("false")) {      dynamicPages(router);
-    }*/
-
+     }*/
     // API
     router.mountSubRouter("/api", apiRouter());
 
     // SockJS / EventBus
     //router.route("/eventbus/*").handler(eventBusHandler());
-
     //No matcher - MUST be last in routers chain
     router.route().handler(con -> {
       con.fail(404);
@@ -227,17 +226,16 @@ public class WebserverVerticle extends AbstractVerticle {
    hbsEngine.setMaxCacheSize(0); /* no cache since we wan't hot-reload for templates */ //TODO: checkup this setting!
 
   /* TemplateHandler templateHandler = TemplateHandler.create(hbsEngine);    //router.get("/private/*").handler(userContextHandler::fromSession);
-    router.getWithRegex(".+\\.hbs").handler(con -> {
-      final Session session = con.session();
-      con.data().put("userLogin", session.get("login"));
-      con.data().put("accessToken", session.get("accessToken"));
+   router.getWithRegex(".+\\.hbs").handler(con -> {
+   final Session session = con.session();
+   con.data().put("userLogin", session.get("login"));
+   con.data().put("accessToken", session.get("accessToken"));
 
-      con.next();
-    });
-    router.getWithRegex(".+\\.hbs").handler(templateHandler);
-    return router;
+   con.next();
+   });
+   router.getWithRegex(".+\\.hbs").handler(templateHandler);
+   return router;
    }*/
-
   /**
    * Set up router for handling REST API-requests.
    *
@@ -287,24 +285,61 @@ public class WebserverVerticle extends AbstractVerticle {
       con.next();
     });
 
+    // Root API help
+    router.get("/").handler((RoutingContext con) -> {
+      String baseAddress = con.request().localAddress().toString() + con.mountPoint();
+      JsonObject result = new JsonObject()
+          .put("resources",
+              new JsonArray()
+              .add(baseAddress + "/system")
+              .add(baseAddress + "/plugins")
+              .add(baseAddress + "/repoplugins")
+              .add(baseAddress + "/adaptertypes")
+              .add(baseAddress + "/adapters")
+              .add(baseAddress + "/users")
+              .add(baseAddress + "/sites"));
+
+      con.response().end(result.encodePrettily());
+    });
+
     // System-api
     router.get("/system/info").handler(systemApi::systemInformation);
     router.get("/system/resources").handler(systemApi::systemResources);
+
+    router.get("/system").handler((RoutingContext con) -> {
+      String baseAddress = con.request().localAddress().toString() + con.mountPoint();
+      JsonObject result = new JsonObject()
+          .put("resources",
+              new JsonArray()
+              .add(baseAddress + "/system/info")
+              .add(baseAddress + "/system/resources")
+          );
+
+      con.response().end(result.encodePrettily());
+    });
+
     // Plugin-api
     router.post("/plugins").handler(pluginApi::install);
     router.get("/plugins").handler(pluginApi::listInstalled);
     router.put("/plugins/:name").handler(pluginApi::update);
     router.delete("/plugins/:name").handler(pluginApi::uninstall);
     router.get("/repoplugins/:filter").handler(pluginApi::listRepoPlugins);
-    // Adapter-api
+    // Devices & Adapters
+    router.get("/adapters/devices").handler(deviceApi::listAllDevices);
+    router.get("/adapters/:adapterId/supportedDevices").handler(deviceApi::retrieveSupportedAdapterDevices);
+    router.get("/adapters/:adapterId/devices").handler(deviceApi::listAdapterDevices);
+    router.post("/adapters/:adapterId/devices").handler(deviceApi::createAdapterDevice);
+    router.get("/adapters/:adapterId/devices/:deviceId").handler(deviceApi::retrieveAdapterDevice);
+    router.put("/adapters/:adapterId/devices/:deviceId").handler(deviceApi::updateAdapterDevice);
+    router.delete("/adapters/:adapterId/devices/:deviceId").handler(deviceApi::deleteAdapterDevice);
+    router.get("/adapters/:adapterId/devices/:deviceId/value").handler(deviceApi::getDeviceValue);
+    router.put("/adapters/:adapterId/devices/:deviceId/value").handler(deviceApi::setDeviceValue);
     router.get("/adaptertypes").handler(adapterApi::listAdaptertypes);
     router.post("/adapters").handler(adapterApi::add);
     router.get("/adapters").handler(adapterApi::list);
     router.get("/adapters/:adapterId").handler(adapterApi::retrieve);
     router.delete("/adapters/:adapterId").handler(adapterApi::remove);
-    router.get("/adapters/:adapterId/supportedDevices").handler(deviceApi::listSupportedDevices);
     // User-api
-    //router.route("/users*").handler(userContextHandler::fromApiToken);
     router.post("/users").handler(userApi::create);
     router.get("/users").handler(userApi::list);
     router.get("/users/:userId").handler(userApi::retrieve);
@@ -316,25 +351,17 @@ public class WebserverVerticle extends AbstractVerticle {
     router.get("/users/:userId/sessions").handler(userApi::retrieveSession);
     router.delete("/users/:userId/sessions").handler(userApi::deleteSession);
     // Site-api
-    //router.route("/sites*").handler(userContextHandler::fromApiToken);
     router.post("/sites").handler(siteApi::create);
     router.get("/sites").handler(siteApi::list);
     router.get("/sites/:siteId").handler(siteApi::retrieve);
     router.put("/sites/:siteId").handler(siteApi::update);
     router.delete("/sites/:siteId").handler(siteApi::delete);
     // Device-api
-    router.post("/sites/:siteId/devices").handler(deviceApi::create);
-    router.get("/sites/:siteId/devices").handler(deviceApi::list);
-    router.get("/sites/:siteId/devices/:deviceId").handler(deviceApi::retrieve);
-    router.put("/sites/:siteId/devices/:deviceId").handler(deviceApi::update);
-    router.delete("/sites/:siteId/devices/:deviceId").handler(deviceApi::delete);
-    // Unbound devices-api (devices that not yet been bound to a site)
-    //router.route("/unbounddevices*").handler(userContextHandler::fromApiToken);
-    router.post("/unbounddevices").handler(deviceApi::createUnboundDevice);
-    router.get("/unbounddevices").handler(deviceApi::listUnboundDevices);
-    router.get("/unbounddevices/:deviceId").handler(deviceApi::retrieveUnboundDevice);
-    router.put("/unbounddevices/:deviceId").handler(deviceApi::updateUnboundDevice);
-    router.delete("/unbounddevices/:deviceId").handler(deviceApi::deleteUnboundDevice);
+    router.post("/sites/:siteId/devices").handler(deviceApi::addToSite);
+    router.get("/sites/:siteId/devices").handler(deviceApi::listOnSite);
+    router.get("/sites/:siteId/devices/:deviceId").handler(deviceApi::retrieveOnSite);
+    router.put("/sites/:siteId/devices/:deviceId").handler(deviceApi::updateOnSite);
+    router.delete("/sites/:siteId/devices/:deviceId").handler(deviceApi::deleteFromSite);
 
     return router;
   }
@@ -348,7 +375,6 @@ public class WebserverVerticle extends AbstractVerticle {
     SockJSHandler handler = SockJSHandler.create(vertx);
 
     // TODO: Add new eventbus code for vertx-3.1
-
     return handler;
   }
 }

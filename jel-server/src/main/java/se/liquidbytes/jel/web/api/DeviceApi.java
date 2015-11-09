@@ -41,14 +41,168 @@ public class DeviceApi {
     service = JelServiceProxy.createProxy(this.vertx, Settings.EVENTBUS_NAME);
   }
 
-  public void create(RoutingContext context) {
+  public void listAllDevices(RoutingContext context) {
+    service.listAllDevices((r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void retrieveSupportedAdapterDevices(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String adapterId = request.getParam("adapterId");
+    if (adapterId == null) {
+      context.fail(400);
+      return;
+    }
+
+    service.listSupportedAdapterDevices(adapterId, (r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void listAdapterDevices(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String adapterId = request.getParam("adapterId");
+    if (adapterId == null) {
+      context.fail(400);
+      return;
+    }
+
+    service.listAdapterDevices(adapterId, (r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void createAdapterDevice(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String adapterId = request.getParam("adapterId");
+    if (adapterId == null) {
+      context.fail(400);
+      return;
+    }
+
+    service.createAdapterDevice(adapterId, context.getBodyAsJson(), (r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void retrieveAdapterDevice(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String adapterId = request.getParam("adapterId");
+    String deviceId = request.getParam("deviceId");
+
+    if (adapterId == null || deviceId == null) {
+      context.fail(400);
+      return;
+    }
+// As device id is unique we don't really need adapter id.
+    service.retrieveAdapterDevice(deviceId, (r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void updateAdapterDevice(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String deviceId = request.getParam("deviceId");
+
+    if (deviceId == null) {
+      context.fail(400);
+      return;
+    }
+    // As device id is unique we don't really need adapter id.
+    service.updateAdapterDevice(deviceId, context.getBodyAsJson(), (r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void deleteAdapterDevice(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String deviceId = request.getParam("deviceId");
+
+    if (deviceId == null) {
+      context.fail(400);
+      return;
+    }
+// As device id is unique we don't really need adapter id.
+    service.deleteAdapterDevice(deviceId, (r) -> {
+      if (r.succeeded()) {
+        context.response().end();
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void getDeviceValue(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String adapterId = request.getParam("adapterId");
+    String deviceId = request.getParam("deviceId");
+
+    if (adapterId == null || deviceId == null) {
+      context.fail(400);
+      return;
+    }
+
+    service.retrieveDeviceValue(adapterId, deviceId, (r) -> {
+      if (r.succeeded()) {
+        context.response().end(r.result().encodePrettily());
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void setDeviceValue(RoutingContext context) {
+    HttpServerRequest request = context.request();
+    String adapterId = request.getParam("adapterId");
+    String deviceId = request.getParam("deviceId");
+
+    if (adapterId == null || deviceId == null) {
+      context.fail(400);
+      return;
+    }
+
+    service.updateDeviceValue(adapterId, deviceId, context.getBodyAsJson(), (r) -> {
+      if (r.succeeded()) {
+        context.response().end();
+      } else {
+        context.fail(r.cause());
+      }
+    });
+  }
+
+  public void addToSite(RoutingContext context) {
     JsonObject body = context.getBodyAsJson();
     JsonObject user = context.get("user");
 
     context.response().end("TODO");
   }
 
-  public void list(RoutingContext context) {
+  public void listOnSite(RoutingContext context) {
     HttpServerRequest request = context.request();
     String siteId = request.getParam("siteId");
     if (siteId == null) {
@@ -65,7 +219,7 @@ public class DeviceApi {
     });
   }
 
-  public void retrieve(RoutingContext context) {
+  public void retrieveOnSite(RoutingContext context) {
     HttpServerRequest request = context.request();
     String siteId = request.getParam("siteId");
     if (siteId == null) {
@@ -76,26 +230,12 @@ public class DeviceApi {
     context.response().end("TODO");
   }
 
-  public void update(RoutingContext context) {
+  public void updateOnSite(RoutingContext context) {
     context.response().end("TODO");
   }
 
-  public void delete(RoutingContext context) {
+  public void deleteFromSite(RoutingContext context) {
     context.response().end("TODO");
-  }
-
-  public void createUnboundDevice(RoutingContext context) {
-    context.response().end("TODO");
-  }
-
-  public void listUnboundDevices(RoutingContext context) {
-    service.listUnboundDevices((r) -> {
-      if (r.succeeded()) {
-        context.response().end(r.result().encodePrettily());
-      } else {
-        context.fail(r.cause());
-      }
-    });
   }
 
   public void listSupportedDevices(RoutingContext context) {
@@ -106,24 +246,12 @@ public class DeviceApi {
       return;
     }
 
-    service.listSupportedDevices(adapterId, (r) -> {
+    service.listSupportedAdapterDevices(adapterId, (r) -> {
       if (r.succeeded()) {
         context.response().end(r.result().encodePrettily());
       } else {
         context.fail(r.cause());
       }
     });
-  }
-
-  public void retrieveUnboundDevice(RoutingContext context) {
-    context.response().end("TODO");
-  }
-
-  public void updateUnboundDevice(RoutingContext context) {
-    context.response().end("TODO");
-  }
-
-  public void deleteUnboundDevice(RoutingContext context) {
-    context.response().end("TODO");
   }
 }

@@ -15,7 +15,6 @@
  */
 package se.liquidbytes.jel.system.impl;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
@@ -31,7 +30,6 @@ import se.liquidbytes.jel.system.JelService;
 import se.liquidbytes.jel.system.JelServiceProxy;
 import se.liquidbytes.jel.system.adapter.AdapterConfiguration;
 import se.liquidbytes.jel.system.adapter.DeployedAdapter;
-import se.liquidbytes.jel.system.device.Device;
 import se.liquidbytes.jel.system.plugin.PluginDesc;
 
 /**
@@ -52,6 +50,10 @@ public class JelServiceImpl implements JelServiceProxy {
   public void start() {
     JelService.adapterManager().start();
     JelService.pluginManager().start();
+    // Wait a while to let stuff get into place before talking to the adapters.
+    JelService.vertx().setTimer(500, h -> {
+      JelService.deviceManager().start();
+    });
   }
 
   /**
@@ -59,16 +61,22 @@ public class JelServiceImpl implements JelServiceProxy {
    */
   @Override
   public void stop() {
-    if (JelService.adapterManager() != null) {
-      Future<Void> future = Future.future();
-      future.setHandler(res -> {
-        if (JelService.pluginManager() != null) {
-          JelService.pluginManager().stop();
-        }
-      });
-
-      JelService.adapterManager().stop(future);
+    if (JelService.deviceManager() != null) {
+      JelService.deviceManager().stop();
     }
+
+    JelService.vertx().setTimer(500, h -> {
+      if (JelService.adapterManager() != null) {
+        Future<Void> future = Future.future();
+        future.setHandler(res -> {
+          if (JelService.pluginManager() != null) {
+            JelService.pluginManager().stop();
+          }
+        });
+
+        JelService.adapterManager().stop(future);
+      }
+    });
   }
 
   // System
@@ -232,9 +240,9 @@ public class JelServiceImpl implements JelServiceProxy {
 
   // Devices
   @Override
-  public void listSupportedDevices(String id, Handler<AsyncResult<JsonArray>> resultHandler) {
+  public void createAdapterDevice(String adapterId, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler) {
     try {
-      JelService.deviceManager().listSupportedDevices(id, (onResult) -> {
+      JelService.deviceManager().createAdapterDevice(adapterId, device, (onResult) -> {
         if (onResult.succeeded()) {
           resultHandler.handle(Future.succeededFuture(onResult.result()));
         } else {
@@ -247,9 +255,9 @@ public class JelServiceImpl implements JelServiceProxy {
   }
 
   @Override
-  public void listUnboundDevices(Handler<AsyncResult<JsonArray>> resultHandler) {
+  public void listAdapterDevices(String adapterId, Handler<AsyncResult<JsonArray>> resultHandler) {
     try {
-      JelService.deviceManager().listUnboundDevices((onResult) -> {
+      JelService.deviceManager().listAdapterDevices(adapterId, (onResult) -> {
         if (onResult.succeeded()) {
           resultHandler.handle(Future.succeededFuture(onResult.result()));
         } else {
@@ -262,41 +270,126 @@ public class JelServiceImpl implements JelServiceProxy {
   }
 
   @Override
-  public void createUnboundDevice(JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  public void retrieveAdapterDevice(String id, Handler<AsyncResult<JsonObject>> resultHandler) {
+    try {
+      JelService.deviceManager().retrieveAdapterDevice(id, (onResult) -> {
+        if (onResult.succeeded()) {
+          resultHandler.handle(Future.succeededFuture(onResult.result()));
+        } else {
+          resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
+        }
+      });
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   @Override
-  public void retrieveUnboundDevice(String id, Handler<AsyncResult<JsonObject>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  public void updateAdapterDevice(String id, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler) {
+    try {
+      JelService.deviceManager().updateAdapterDevice(id, device, (onResult) -> {
+        if (onResult.succeeded()) {
+          resultHandler.handle(Future.succeededFuture(onResult.result()));
+        } else {
+          resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
+        }
+      });
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   @Override
-  public void updateUnboundDevice(String id, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  public void deleteAdapterDevice(String id, Handler<AsyncResult<Void>> resultHandler) {
+    try {
+      JelService.deviceManager().deleteAdapterDevice(id, (onResult) -> {
+        if (onResult.succeeded()) {
+          resultHandler.handle(Future.succeededFuture(onResult.result()));
+        } else {
+          resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
+        }
+      });
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   @Override
-  public void deleteUnboundDevice(String id, Handler<AsyncResult<Void>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  public void listSupportedAdapterDevices(String id, Handler<AsyncResult<JsonArray>> resultHandler) {
+    try {
+      JelService.deviceManager().listSupportedAdapterDevices(id, (onResult) -> {
+        if (onResult.succeeded()) {
+          resultHandler.handle(Future.succeededFuture(onResult.result()));
+        } else {
+          resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
+        }
+      });
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
+  }
+
+  @Override
+  public void listAllDevices(Handler<AsyncResult<JsonArray>> resultHandler) {
+    try {
+      JelService.deviceManager().listAllDevices((onResult) -> {
+        if (onResult.succeeded()) {
+          resultHandler.handle(Future.succeededFuture(onResult.result()));
+        } else {
+          resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
+        }
+      });
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
   }
 
   @Override
   public void listSiteDevices(String siteId, Handler<AsyncResult<JsonArray>> resultHandler) {
-    try {
-      List<? extends Device> devices = JelService.deviceManager().listSiteDevices(siteId);
+    /*try {      //TODO: Hmm this should be done in devicemanager and here we sohuld only work with JSON.
+     List<? extends Device> devices = JelService.deviceManager().listSiteDevices(siteId);
 
-      JsonArray list = new JsonArray();
-      devices.stream().forEach((device) -> {
-        try {
-          list.add(device.toApi());
-        } catch (JsonProcessingException ex) {
-          logger.warn(String.format("Fail to serialize device(id=%s, name=%s) to JSON.", device.getId(), device.getName()), ex);
+     JsonArray list = new JsonArray();
+     devices.stream().forEach((device) -> {
+     try {
+     list.add(device.toApi());
+     } catch (JsonProcessingException ex) {
+     logger.warn(String.format("Fail to serialize device(id=%s, name=%s) to JSON.", device.getId(), device.getName()), ex);
+     }
+     });
+
+     resultHandler.handle(Future.succeededFuture(list));
+     } catch (JelException ex) {
+     resultHandler.handle(Future.failedFuture(ex.getMessage()));
+     }*/
+  }
+
+  @Override
+  public void retrieveDeviceValue(String adapterId, String deviceId, Handler<AsyncResult<JsonObject>> resultHandler) {
+    try {
+      JelService.deviceManager().retrieveDeviceValue(adapterId, deviceId, (onResult) -> {
+        if (onResult.succeeded()) {
+          resultHandler.handle(Future.succeededFuture(onResult.result()));
+        } else {
+          resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
         }
       });
+    } catch (Exception ex) {
+      resultHandler.handle(Future.failedFuture(ex.getMessage()));
+    }
+  }
 
-      resultHandler.handle(Future.succeededFuture(list));
-    } catch (JelException ex) {
+  @Override
+  public void updateDeviceValue(String adapterId, String deviceId, JsonObject value, Handler<AsyncResult<Void>> resultHandler) {
+    try {
+      JelService.deviceManager().updateDeviceValue(adapterId, deviceId, value, (onResult) -> {
+        if (onResult.succeeded()) {
+          resultHandler.handle(Future.succeededFuture(onResult.result()));
+        } else {
+          resultHandler.handle(Future.failedFuture(onResult.cause().getMessage()));
+        }
+      });
+    } catch (Exception ex) {
       resultHandler.handle(Future.failedFuture(ex.getMessage()));
     }
   }

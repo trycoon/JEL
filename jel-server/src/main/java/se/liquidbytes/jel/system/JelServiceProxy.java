@@ -114,17 +114,41 @@ public interface JelServiceProxy {
   void deleteSite(String id, Handler<AsyncResult<Void>> resultHandler);
 
   // Devices
-  void createUnboundDevice(JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler);
+  void createAdapterDevice(String adapterId, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler);
 
-  void listSupportedDevices(String id, Handler<AsyncResult<JsonArray>> resultHandler);
+  void listAdapterDevices(String adapterId, Handler<AsyncResult<JsonArray>> resultHandler);
 
-  void listUnboundDevices(Handler<AsyncResult<JsonArray>> resultHandler);
+  void retrieveAdapterDevice(String id, Handler<AsyncResult<JsonObject>> resultHandler);
 
-  void retrieveUnboundDevice(String id, Handler<AsyncResult<JsonObject>> resultHandler);
+  void updateAdapterDevice(String id, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler);
 
-  void updateUnboundDevice(String id, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler);
+  void deleteAdapterDevice(String id, Handler<AsyncResult<Void>> resultHandler);
 
-  void deleteUnboundDevice(String id, Handler<AsyncResult<Void>> resultHandler);
+  void listSupportedAdapterDevices(String adapterId, Handler<AsyncResult<JsonArray>> resultHandler);
 
-  void listSiteDevices(String id, Handler<AsyncResult<JsonArray>> resultHandler);
+  void listAllDevices(Handler<AsyncResult<JsonArray>> resultHandler);
+
+  void listSiteDevices(String siteId, Handler<AsyncResult<JsonArray>> resultHandler);
+
+  void retrieveDeviceValue(String adapterId, String deviceId, Handler<AsyncResult<JsonObject>> resultHandler);
+
+  void updateDeviceValue(String adapterId, String deviceId, JsonObject value, Handler<AsyncResult<Void>> resultHandler);
+  /*
+   router.post ("/sites/:siteId/devices").handler(deviceApi::addToSite);
+   router.get ("/sites/:siteId/devices").handler(deviceApi::listOnSite);
+   router.get ("/sites/:siteId/devices/:deviceId").handler(deviceApi::retrieveOnSite);
+   router.put ("/sites/:siteId/devices/:deviceId").handler(deviceApi::updateOnSite);
+   router.delete ("/sites/:siteId/devices/:deviceId").handler(deviceApi::deleteFromSite);
+
+   // User-api
+   router.post ("/users").handler(userApi::create);
+   router.get ("/users").handler(userApi::list);
+   router.get ("/users/:userId").handler(userApi::retrieve);
+   router.put ("/users/:userId").handler(userApi::update);
+   router.delete ("/users/:userId").handler(userApi::delete);
+   // Session-api (login/logout)
+   router.post ("/users/sessions").handler(userApi::createSession);
+   router.get ("/users/sessions").handler(userApi::listSessions);
+   router.get ("/users/:userId/sessions").handler(userApi::retrieveSession);
+   router.delete ("/users/:userId/sessions").handler(userApi::deleteSession);*/
 }

@@ -435,6 +435,14 @@ public final class AdapterManager {
                 config.put("type", adapterToStart.getType());          // Name of adaptertype.
                 config.put("address", adapterToStart.getAddress());    // Address of adapter, could be a network TCP/IP address, but also the type of a physical port e.g. "/dev/ttyS0".
                 config.put("port", adapterToStart.getPort());          // Optional port of adapter, most commonly used by networked based adapter.
+                AdapterConfiguration deployedConfig = new AdapterConfiguration(config);
+
+                DeployedAdapter adapter = new DeployedAdapter();
+                adapter.config(deployedConfig);
+                adapter.setPluginDescription(adapterType);
+
+                // Stupid circular dependencies, but now we finally has the adapter id.
+                config.put("adapterId", adapter.Id());
 
                 DeploymentOptions deployOptions = new DeploymentOptions();
                 deployOptions.setConfig(config);
@@ -442,17 +450,12 @@ public final class AdapterManager {
                 deployOptions.setWorker(true);
 
                 JelService.vertx().deployVerticle(adapterInstance, deployOptions, res -> {
-                  AdapterConfiguration deployedConfig = new AdapterConfiguration(config.getString("type"), config.getString("address"), config.getInteger("port"));
-
                   if (res.succeeded()) {
-
                     logger.info("Successfully deployed verticle with id: {}, for adapter '{}' using address '{}' and port '{}'.",
                         res.result(), deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort());
 
-                    DeployedAdapter adapter = new DeployedAdapter();
                     adapter.deploymentId(res.result());
-                    adapter.config(deployedConfig);
-                    adapter.setPluginDescription(adapterType);
+
                     adapterList.add(adapter);
 
                     JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STARTED));
@@ -501,6 +504,14 @@ public final class AdapterManager {
           config.put("type", adapterConfig.getType());          // Name of adaptertype.
           config.put("address", adapterConfig.getAddress());    // Address of adapter, could be a network TCP/IP address, but also the type of a physical port e.g. "/dev/ttyS0".
           config.put("port", adapterConfig.getPort());          // Optional port of adapter, most commonly used by networked based adapter.
+          AdapterConfiguration deployedConfig = new AdapterConfiguration(config);
+
+          DeployedAdapter adapter = new DeployedAdapter();
+          adapter.config(deployedConfig);
+          adapter.setPluginDescription(plugin.get());
+
+          // Stupid circular dependencies, but now we finally has the adapter id.
+          config.put("adapterId", adapter.Id());
 
           DeploymentOptions deployOptions = new DeploymentOptions();
           deployOptions.setConfig(config);
@@ -508,8 +519,6 @@ public final class AdapterManager {
           deployOptions.setWorker(true);
 
           JelService.vertx().deployVerticle(adapterInstance, deployOptions, res -> {
-            AdapterConfiguration deployedConfig = new AdapterConfiguration(config.getString("type"), config.getString("address"), config.getInteger("port"));
-
             if (res.succeeded()) {
               logger.info("Successfully deployed verticle with id: {}, for adapter '{}' using address '{}' and port '{}'.",
                   res.result(), deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort());
@@ -520,10 +529,8 @@ public final class AdapterManager {
 
               List<DeployedAdapter> adapterList = adapters.get(deployedConfig.getType());
 
-              DeployedAdapter adapter = new DeployedAdapter();
               adapter.deploymentId(res.result());
-              adapter.config(deployedConfig);
-              adapter.setPluginDescription(plugin.get());
+
               adapterList.add(adapter);
 
               JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STARTED));

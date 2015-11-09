@@ -31,6 +31,26 @@ public abstract class AbstractAdapter extends AbstractVerticle implements Plugin
    */
   private Logger logger;
 
+  private String id;
+
+  /**
+   * Get id for adapter.
+   *
+   * @return adapter id
+   */
+  public String getId() {
+    return id;
+  }
+
+  /**
+   * Set id for adapter.
+   *
+   * @param id id to assign adapter.
+   */
+  protected void setId(String id) {
+    this.id = id;
+  }
+
   /**
    * Get a more informative description of the adapter, Optional.
    *

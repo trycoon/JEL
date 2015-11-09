@@ -56,6 +56,7 @@ public final class DeviceManager {
    */
   public final static String EVENTBUS_DEVICES_ADDED = "DEVICE_ADDED";
   public final static String EVENTBUS_DEVICES_REMOVED = "DEVICE_REMOVED";
+  public final static String EVENTBUS_DEVICE_NEWREADING = "DEVICE_NEWREADING";
 
   /**
    * Collection of all devices for a specific site.
@@ -67,7 +68,12 @@ public final class DeviceManager {
    */
   public DeviceManager() {
     siteDevices = new ConcurrentHashMap<>();
+  }
 
+  /**
+   * Method for starting device manager, should be called upon application startup.
+   */
+  public void start() {
     //TODO: hardcoded!
     List<Device> devices = new ArrayList<>();
     Sensor sensor = new Sensor();
@@ -95,46 +101,85 @@ public final class DeviceManager {
     devices.add(sensor);
 
     siteDevices.put("1", devices);
+
   }
 
   /**
-   * Get all devices bound to a specified site.
-   *
-   * @param siteId site to get devices for
-   * @return collection of devices
+   * Method for stopping device manager, should be called upon application shutdown.
    */
-  public List<? extends Device> listSiteDevices(String siteId) {
-    List<? extends Device> devices = new ArrayList<>();
+  public void stop() {
+    logger.info("Shutting down devicemanager...");
 
-    if (siteDevices.containsKey(siteId)) {
-      devices = siteDevices.get(siteId);
+    siteDevices.clear();
+  }
+
+  public void createAdapterDevice(String adapterId, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler) {
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  }
+
+  public void listAdapterDevices(String adapterId, Handler<AsyncResult<JsonArray>> resultHandler) {
+    DeliveryOptions options = new DeliveryOptions();
+    options.addHeader("action", "listDevices");
+    DeployedAdapter adapter = JelService.adapterManager().getAdapter(adapterId);
+
+    if (adapter == null) {
+      resultHandler.handle(Future.failedFuture(
+          String.format("Adapter with id %s does not exist.", adapterId))
+      );
+    } else {
+      // Send message to adapter to report back its devices.
+      JelService.vertx().eventBus().send(
+          String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort()),
+          null, options, res -> {
+            if (res.succeeded()) {
+              JsonArray devices = new JsonArray();
+
+              JsonObject result = (JsonObject) res.result().body();
+              // TODO: we should maybe keep track which adapter returned which device, so in the future we could send a message to a specific device (and then we need to know which adapter that are the owner).
+              devices.addAll(result.getJsonArray("result"));
+
+              resultHandler.handle(Future.succeededFuture(devices));
+            } else {
+              resultHandler.handle(Future.failedFuture(res.cause()));
+            }
+          });
     }
+  }
 
-    return devices;
+  public void retrieveAdapterDevice(String id, Handler<AsyncResult<JsonObject>> resultHandler) {
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  }
+
+  public void updateAdapterDevice(String id, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler) {
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  }
+
+  public void deleteAdapterDevice(String id, Handler<AsyncResult<Void>> resultHandler) {
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
   }
 
   /**
    * Returns a list of all supported devices for a specific adapter.
    *
-   * @param id id for adapter to query.
+   * @param adapterId id for adapter to query.
    * @param resultHandler Promise will give the list of supported devices.
    */
-  public void listSupportedDevices(String id, Handler<AsyncResult<JsonArray>> resultHandler) {
-
+  public void listSupportedAdapterDevices(String adapterId, Handler<AsyncResult<JsonArray>> resultHandler) {
     DeliveryOptions options = new DeliveryOptions();
     options.addHeader("action", "listSupportedDevices");
-    DeployedAdapter adapter = JelService.adapterManager().getAdapter(id);
+    DeployedAdapter adapter = JelService.adapterManager().getAdapter(adapterId);
 
     if (adapter == null) {
-      resultHandler.handle(Future.succeededFuture(new JsonArray()));
+      resultHandler.handle(Future.failedFuture(
+          String.format("Adapter with id %s does not exist.", adapterId))
+      );
     } else {
       JelService.vertx().eventBus().send(
           String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort()),
           null, options, res -> {
             if (res.succeeded()) {
-              JsonArray result = (JsonArray) res.result().body();
-
-              resultHandler.handle(Future.succeededFuture(result));
+              JsonObject result = (JsonObject) res.result().body();
+              resultHandler.handle(Future.succeededFuture(result.getJsonArray("result")));
             } else {
               resultHandler.handle(Future.failedFuture(res.cause()));
             }
@@ -143,18 +188,11 @@ public final class DeviceManager {
   }
 
   /**
-   * Returns a list of all available devices that has not yet been bound to a site.
+   * Returns a list of all available devices for all adapters.
    *
    * @param resultHandler Promise will give the list of devices or a error if one has occured.
    */
-  public void listUnboundDevices(Handler<AsyncResult<JsonArray>> resultHandler) {
-    // TODO:
-    // 1. For every adapter in list of adapters, send a "listDevices"-message.
-    // 2. Collect response from all adapters, and add all devices to one hashmap.
-    // 3. Get all devices from all sites.
-    // 4. Filter out so only devices in hashmap that don't exists in list of devices from sites are left.
-    // 5. Order list after adapter and devicename/id? and return list.
-
+  public void listAllDevices(Handler<AsyncResult<JsonArray>> resultHandler) {
     DeliveryOptions options = new DeliveryOptions();
     options.addHeader("action", "listDevices");
     List<DeployedAdapter> adapters = JelService.adapterManager().getAdapters();
@@ -195,11 +233,58 @@ public final class DeviceManager {
         // When we are done, all adapters devices should be here.
         JsonArray devices = onSuccess.getJsonArray("devices");
 
-        //TODO: Figure out which devices that are bound and filter them out from this collection.
         resultHandler.handle(Future.succeededFuture(devices));
       }).except((onError) -> {
         resultHandler.handle(Future.failedFuture(onError.getString("errorMessage")));
       }).eval();
     }
   }
+
+  public void listSiteDevices(String siteId, Handler<AsyncResult<JsonArray>> resultHandler) {
+    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+  }
+
+  public void retrieveDeviceValue(String adapterId, String deviceId, Handler<AsyncResult<JsonObject>> resultHandler) {
+    DeliveryOptions options = new DeliveryOptions();
+    options.addHeader("action", "retrieveDeviceValue");
+    DeployedAdapter adapter = JelService.adapterManager().getAdapter(adapterId);
+
+    if (adapter == null) {
+      resultHandler.handle(Future.failedFuture(
+          String.format("Adapter with id %s does not exist.", adapterId))
+      );
+    } else {
+      // Send message to adapter to report back its devices.
+      JelService.vertx().eventBus().send(
+          String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort()),
+          null, options, res -> {
+            if (res.succeeded()) {
+              JsonObject result = (JsonObject) res.result().body();
+              resultHandler.handle(Future.succeededFuture(result));
+            } else {
+              resultHandler.handle(Future.failedFuture(res.cause()));
+            }
+          });
+    }
+  }
+
+  public void updateDeviceValue(String adapterId, String deviceId, JsonObject value, Handler<AsyncResult<Void>> resultHandler) {
+
+  }
+
+  /**
+   * Get all devices bound to a specified site.
+   *
+   * @param siteId site to get devices for
+   * @return collection of devices
+   */
+  /*public List<? extends Device> listSiteDevices(String siteId) {
+   List<? extends Device> devices = new ArrayList<>();
+
+   if (siteDevices.containsKey(siteId)) {
+   devices = siteDevices.get(siteId);
+   }
+
+   return devices;
+   }*/
 }

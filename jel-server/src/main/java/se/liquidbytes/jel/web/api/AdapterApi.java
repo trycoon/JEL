@@ -83,7 +83,7 @@ public class AdapterApi {
 
     service.retrieveAdapter(adapterId, (r) -> {
       if (r.succeeded()) {
-        context.response().end();
+        context.response().end(r.result().encodePrettily());
       } else {
         context.fail(r.cause());
       }
