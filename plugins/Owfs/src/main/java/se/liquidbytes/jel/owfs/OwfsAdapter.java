@@ -68,7 +68,7 @@ public class OwfsAdapter extends AbstractAdapter {
   /**
    * Delay between polling 1-wire bus for value-changes.
    */
-  private final static int POLL_VALUE_DELAY = 1000;
+  private final static int POLL_VALUE_DELAY = 4000; //TODO: Set to 1000 when "simultaneous" is implemented.
   /**
    * Connection to Owfs-driver
    */
@@ -273,6 +273,7 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private JsonObject constructReply(Object result) {
     JsonObject msgReply = new JsonObject();
+    msgReply.put("adapterId", this.getId());
     msgReply.put("host", this.host);
     msgReply.put("port", this.port);
     msgReply.put("result", result);
@@ -347,6 +348,7 @@ public class OwfsAdapter extends AbstractAdapter {
             device = new JsonObject();
             device.put("id", deviceId);
             device.put("type", deviceType);
+            device.put("name", typeInfo.getString("name"));
             device.put("family", deviceFamily);
             device.put("path", owDevice);
             device.put("typeInfo", typeInfo);
@@ -427,6 +429,17 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private List<JsonObject> getParentDevicesOnly() {
     return deviceLookup.values().stream().filter(d -> !d.getString("id").contains("#")).collect(Collectors.toList());
+  }
+
+  /**
+   * Get child devices for a parent device, empty list if no ones exists.
+   *
+   * @return List of child devices.
+   */
+  private List<JsonObject> getChildDevicesOnly(String parentId) {
+    return deviceLookup.values().stream().filter(d -> d.getString("id").contains(parentId + "#"))
+        .sorted((d1, d2) -> d1.getString("id").compareTo(d2.getString("id")))
+        .collect(Collectors.toList());
   }
 
   /**
@@ -554,19 +567,50 @@ public class OwfsAdapter extends AbstractAdapter {
             readings = deviceReadings.get(id);
           }
 
+          String lastValue = readings.getJsonObject("lastReading").getString("value");
           // Only add this reading to list of readings for device if the value of the reading has changed since the last time we did a reading. We save a lot of space and memory by doing this!
-          if (!value.equals(readings.getJsonObject("lastReading").getString("value"))) {
+          if (!value.equals(lastValue)) {
             readings.put("lastReading", reading);
             logger.info("Recorded new value '{}' at time '{}' for device with id '{}' on Owserver at {}:{} with id \"{}\".", value, reading.getString("time"), id, this.host, this.port, this.getId());
 
-            //TODO: Handle child-devices, changes to each of them should be broadcasted individually!
-            JsonObject broadcast = new JsonObject()
-                .put("adapterId", this.getId())
-                .put("port", this.port)
-                .put("host", this.host)
-                .put("reading", reading);
+            List<JsonObject> childs = getChildDevicesOnly(id);
 
-            vertx.eventBus().publish(EVENTBUS_DEVICES, broadcast, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICE_NEWREADING));
+            if (childs.isEmpty()) {
+              // This device has no children, so we just notify that this device has a value that has changed.
+              JsonObject broadcast = new JsonObject()
+                  .put("adapterId", this.getId())
+                  .put("port", this.port)
+                  .put("host", this.host)
+                  .put("reading", reading);
+
+              vertx.eventBus().publish(EVENTBUS_DEVICES, broadcast, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICE_NEWREADING));
+            } else {
+              // This is a parent device so we must check which of its children  that has changed and notify each and every one of them on the bus.
+              String[] childValues = value.split(",");
+              String[] lastChildValues;
+
+              if (lastValue == null) {
+                lastChildValues = new String[childValues.length];
+              } else {
+                lastChildValues = lastValue.split(",");
+              }
+
+              for (int i = 0; i < childValues.length; i++) {
+                if (!childValues[i].equals(lastChildValues[i])) {
+                  JsonObject broadcast = new JsonObject()
+                      .put("adapterId", this.getId())
+                      .put("port", this.port)
+                      .put("host", this.host)
+                      .put("reading", new JsonObject()
+                          .put("id", childs.get(i).getString("id"))
+                          .put("time", reading.getString("time"))
+                          .put("value", childValues[i])
+                      );
+
+                  vertx.eventBus().publish(EVENTBUS_DEVICES, broadcast, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICE_NEWREADING));
+                }
+              }
+            }
           }
         } else {
           logger.warn("Failed to read current value from device.", res.cause());
@@ -583,7 +627,9 @@ public class OwfsAdapter extends AbstractAdapter {
   private JsonArray getAvailableDevices() {
     JsonArray result = new JsonArray();
 
-    List<JsonObject> deviceList = deviceLookup.values().stream().sorted(comparing((JsonObject d) -> d.getString("type")).thenComparing((JsonObject d) -> d.getString("name"))).collect(Collectors.toList());
+    List<JsonObject> deviceList = deviceLookup.values().stream().sorted(comparing((JsonObject d) -> d.getString("type"))
+        .thenComparing((JsonObject d) -> d.getString("name")))
+        .collect(Collectors.toList());
     for (JsonObject device : deviceList) {
       result.add(
           new JsonObject()
@@ -624,16 +670,37 @@ public class OwfsAdapter extends AbstractAdapter {
    * Read value from device with specified id.
    *
    * @param deviceId Id on device
-   * @return device current value.
+   * @return device last recorded value.
    * @throws DeviceMissingException throws exception if specified device does not exist.
    */
-  private String getDeviceValue(String deviceId) throws DeviceMissingException, IOException, OwfsException {
+  private JsonObject getDeviceValue(String deviceId) throws DeviceMissingException, IOException, OwfsException {
 
     if (deviceId == null || !deviceLookup.containsKey(deviceId)) {
       throw new DeviceMissingException("Trying to perform a action on a non existing device.", deviceId);
     }
-    //TODO: Get last reading.
-    return null;
+
+    // Check if child device.
+    if (!deviceId.contains("#")) {
+      JsonObject reading = this.deviceReadings.get(deviceId);
+
+      JsonObject response = new JsonObject()
+          .put("reading", reading);
+
+      return response;
+    } else {
+      JsonObject reading = this.deviceReadings.get(deviceId.split("#")[0]); // Get value from parent.
+      int index = Integer.parseInt(deviceId.split("#")[1]) - 1;         // Get child idsuffix.
+      String value = reading.getJsonObject("lastReading").getString("value").split(",")[index];  // Get child reading from parent reading.
+
+      JsonObject response = new JsonObject()
+          .put("reading", new JsonObject()
+              .put("id", deviceId)
+              .put("time", reading.getJsonObject("lastReading").getString("time"))
+              .put("value", value)
+          );
+
+      return response;
+    }
   }
 
   /**
