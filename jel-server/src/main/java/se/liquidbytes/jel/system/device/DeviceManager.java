@@ -257,7 +257,7 @@ public final class DeviceManager {
       // Send message to adapter to report back its devices.
       JelService.vertx().eventBus().send(
           String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort()),
-          null, options, res -> {
+          new JsonObject().put("deviceId", deviceId), options, res -> {
             if (res.succeeded()) {
               JsonObject result = (JsonObject) res.result().body();
               resultHandler.handle(Future.succeededFuture(result));

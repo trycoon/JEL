@@ -175,7 +175,7 @@ public class SystemInfo {
 
     info.put("applicationVersion", getVersion());
     info.put("applicationStarttime", GetApplicationStarttime());
-    info.put("serverCurrenttime", System.currentTimeMillis());
+    info.put("serverCurrenttime", LocalDateTime.now().toString());
 
     JsonObject java = new JsonObject();
     java.put("virtualMachine", getJavaVirtualMachine());
