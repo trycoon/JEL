@@ -158,8 +158,9 @@ public class SystemInfo {
     builder.append("Free Java memory: ").append(getJavaFreeMemory() / 1048576).append(" MiB of ").append(getJavaTotalMemory() / 1048576).append(" MiB").append("\n");
     builder.append("Free system memory: ").append(getMemoryFree() / 1048576).append(" MiB of ").append(getMemoryTotal() / 1048576).append(" MiB").append("\n");
     builder.append("User language: ").append(getUserLanguage()).append("\n");
-    builder.append("IP Addresses: ").append(getIP()).append("\n");
-    builder.append("Gateway Addresses: ").append(getGatewayIP()).append("\n");
+    builder.append("IP address: ").append(getIP()).append("\n");
+    builder.append("Gateway address: ").append(getGatewayIP()).append("\n");
+    builder.append("Server endpoint: ").append(Settings.getServerEndpoint()).append("\n");
     builder.append("==================================================").append("\n");
 
     return builder.toString();
@@ -197,6 +198,7 @@ public class SystemInfo {
     hardware.put("availableCPUs", getAvailableCPUs());
     hardware.put("ipAddress", getIP());
     hardware.put("gatewayAddress", getGatewayIP());
+    hardware.put("serverEndpoint", Settings.getServerEndpoint());
     hardware.put("bogoMIPS", getBogoMIPS());
     info.put("hardware", hardware);
 

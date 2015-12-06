@@ -41,8 +41,8 @@ final class ProcessArguments {
   @Option(name = "--skipapi", usage = "skip deploying the REST-API provided by JEL. This also disables the webserver(\"skipweb\"-setting)")
   boolean skipapi;
 
-  //@Option(name = "-d", aliases = "--debug", hidden = true, usage = "run application in debug-mode")
-  //boolean debugMode;
+  @Option(name = "--endpoint", usage = "endpoint that this service should be accessable from, including protocol(http/https) and portnumber(if not standard). If none specified then \"http://<servers ip-address>:<portnumber>\"  is used.")
+  String serverEndpoint;
 
   /*Map<String, String> properties = new HashMap<>();
 

@@ -36,10 +36,12 @@ import org.slf4j.LoggerFactory;
  * @author Henrik Östman
  */
 public final class Settings {
+
   private final static String SETTINGS_FILE = "jel.properties";
   private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   // Cache some frequent used settings.
   private static Path storagePath;
+  private static String serverEndpoint;
   private static Properties props;
   private static boolean isDebug;
   /**
@@ -117,6 +119,16 @@ public final class Settings {
         props.setProperty("skipapi", "true");
       }
 
+      if (cliArguments.serverEndpoint != null && !cliArguments.serverEndpoint.isEmpty()) {
+        serverEndpoint = cliArguments.serverEndpoint;
+      } else {
+        serverEndpoint = props.getProperty("serverEndpoint");
+        if (serverEndpoint == null || serverEndpoint.isEmpty()) {
+          serverEndpoint = String.format("%s%s:%s", "http://", SystemInfo.getIP(), props.getProperty("port"));
+        }
+      }
+      props.setProperty("serverEndpoint", serverEndpoint);
+
       logger.info("Successfully loaded settings from file {}", url.toExternalForm());
 
     } catch (IOException ex) {
@@ -189,6 +201,15 @@ public final class Settings {
    */
   public static final Path getStoragePath() {
     return storagePath;
+  }
+
+  /**
+   * Return the server endpoint that the webserver and API should be exposed under.
+   *
+   * @return endpoint
+   */
+  public static final String getServerEndpoint() {
+    return serverEndpoint;
   }
 
   /**

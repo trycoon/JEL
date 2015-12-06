@@ -17,9 +17,11 @@ package se.liquidbytes.jel.system;
 
 import com.cyngn.vertx.async.promise.PromiseFactory;
 import io.vertx.core.Vertx;
+import se.liquidbytes.jel.Settings;
 import se.liquidbytes.jel.system.adapter.AdapterManager;
 import se.liquidbytes.jel.system.device.DeviceManager;
 import se.liquidbytes.jel.system.plugin.PluginManager;
+import se.liquidbytes.jel.web.WebserverVerticle;
 
 /**
  * Class with static references to common used instances needed by JEL components.
@@ -32,7 +34,10 @@ public final class JelService {
    * Namespace of eventbus, used by components that require to talk to JEL-system using its central eventbus.
    */
   public final static String EVENTBUS = "jel.eventbus";
-
+  /**
+   * Endpoint for public REST API.
+   */
+  public final static String API_ENDPOINT = Settings.getServerEndpoint() + WebserverVerticle.REST_MOUNTPOINT;
   /**
    * Vertx instance *
    */

@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.Settings;
 import se.liquidbytes.jel.SystemInfo;
+import static se.liquidbytes.jel.system.JelService.API_ENDPOINT;
 import se.liquidbytes.jel.web.api.AdapterApi;
 import se.liquidbytes.jel.web.api.DeviceApi;
 import se.liquidbytes.jel.web.api.PluginApi;
@@ -54,6 +55,10 @@ import se.liquidbytes.jel.web.api.UserApi;
  */
 public class WebserverVerticle extends AbstractVerticle {
 
+  /**
+   * REST-API mount point
+   */
+  public final static String REST_MOUNTPOINT = "/api";
   /**
    * Logghandler instance
    */
@@ -190,11 +195,11 @@ public class WebserverVerticle extends AbstractVerticle {
     /*if (Settings.get("skipweb").equals("false")) {      dynamicPages(router);
      }*/
     // API
-    router.mountSubRouter("/api", apiRouter());
+    router.mountSubRouter(REST_MOUNTPOINT, apiRouter());
 
     // SockJS / EventBus
     //router.route("/eventbus/*").handler(eventBusHandler());
-    //No matcher - MUST be last in routers chain
+    // No matcher - MUST be last in routers chain
     router.route().handler(con -> {
       con.fail(404);
     });
@@ -287,17 +292,16 @@ public class WebserverVerticle extends AbstractVerticle {
 
     // Root API help
     router.get("/").handler((RoutingContext con) -> {
-      String baseAddress = con.request().localAddress().toString() + con.mountPoint();
       JsonObject result = new JsonObject()
           .put("resources",
               new JsonArray()
-              .add(baseAddress + "/system")
-              .add(baseAddress + "/plugins")
-              .add(baseAddress + "/repoplugins")
-              .add(baseAddress + "/adaptertypes")
-              .add(baseAddress + "/adapters")
-              .add(baseAddress + "/users")
-              .add(baseAddress + "/sites"));
+              .add(API_ENDPOINT + "/system")
+              .add(API_ENDPOINT + "/plugins")
+              .add(API_ENDPOINT + "/repoplugins")
+              .add(API_ENDPOINT + "/adaptertypes")
+              .add(API_ENDPOINT + "/adapters")
+              .add(API_ENDPOINT + "/users")
+              .add(API_ENDPOINT + "/sites"));
 
       con.response().end(result.encodePrettily());
     });
@@ -307,12 +311,11 @@ public class WebserverVerticle extends AbstractVerticle {
     router.get("/system/resources").handler(systemApi::systemResources);
 
     router.get("/system").handler((RoutingContext con) -> {
-      String baseAddress = con.request().localAddress().toString() + con.mountPoint();
       JsonObject result = new JsonObject()
           .put("resources",
               new JsonArray()
-              .add(baseAddress + "/system/info")
-              .add(baseAddress + "/system/resources")
+              .add(API_ENDPOINT + "/system/info")
+              .add(API_ENDPOINT + "/system/resources")
           );
 
       con.response().end(result.encodePrettily());

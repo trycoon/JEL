@@ -56,6 +56,7 @@ public class UserApi {
      context.fail(r.cause());
      }
      });*/
+    context.response().end("TODO");
   }
 
   public void retrieve(RoutingContext context) {
