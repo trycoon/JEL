@@ -70,6 +70,10 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private final static int POLL_VALUE_DELAY = 4000; //TODO: Set to 1000 when "simultaneous" is implemented.
   /**
+   * Character that separates a parent id from a child id. (Must be URL compatible)
+   */
+  private final static String CHILDSEPARATOR = "_";
+  /**
    * Connection to Owfs-driver
    */
   private OwfsConnection owfs;
@@ -365,11 +369,11 @@ public class OwfsAdapter extends AbstractAdapter {
                 .put("name", typeInfo.getString("name"));
             eb.publish(EVENTBUS_DEVICES, broadcastDevice, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICES_ADDED));
 
-            // Check if this device is an container for other "child-devices". In that case, add all the children too, their Id will be <parent#childnumber>.
+            // Check if this device is an container for other "child-devices". In that case, add all the children too, their Id will be <parent_childnumber>.
             if (typeInfo.containsKey("childDevices")) {
               for (Iterator it = typeInfo.getJsonArray("childDevices").iterator(); it.hasNext();) {
                 JsonObject childType = (JsonObject) it.next();
-                String childId = String.format("%s#%s", deviceId, childType.getString("idSuffix"));
+                String childId = String.format("%s%s%s", deviceId, CHILDSEPARATOR, childType.getString("idSuffix"));
 
                 childDevice = new JsonObject();
                 childDevice.put("id", childId);
@@ -401,8 +405,8 @@ public class OwfsAdapter extends AbstractAdapter {
 
       for (String removeId : tempSet) {
         // Check that it's not a childdevice, we are not interested in them right now.
-        if (!removeId.contains("#")) {
-          List<String> childDevicesId = tempSet.stream().filter(d -> d.startsWith(removeId + "#")).collect(Collectors.toList());
+        if (!removeId.contains("")) {
+          List<String> childDevicesId = tempSet.stream().filter(d -> d.startsWith(removeId + CHILDSEPARATOR)).collect(Collectors.toList());
           for (String childDeviceId : childDevicesId) {
             removeDeviceFromLookup(childDeviceId, eb);
           }
@@ -428,7 +432,7 @@ public class OwfsAdapter extends AbstractAdapter {
    * @return List of "parent" devices.
    */
   private List<JsonObject> getParentDevicesOnly() {
-    return deviceLookup.values().stream().filter(d -> !d.getString("id").contains("#")).collect(Collectors.toList());
+    return deviceLookup.values().stream().filter(d -> !d.getString("id").contains(CHILDSEPARATOR)).collect(Collectors.toList());
   }
 
   /**
@@ -437,7 +441,7 @@ public class OwfsAdapter extends AbstractAdapter {
    * @return List of child devices.
    */
   private List<JsonObject> getChildDevicesOnly(String parentId) {
-    return deviceLookup.values().stream().filter(d -> d.getString("id").contains(parentId + "#"))
+    return deviceLookup.values().stream().filter(d -> d.getString("id").contains(parentId + CHILDSEPARATOR))
         .sorted((d1, d2) -> d1.getString("id").compareTo(d2.getString("id")))
         .collect(Collectors.toList());
   }
@@ -680,7 +684,7 @@ public class OwfsAdapter extends AbstractAdapter {
     }
 
     // Check if child device.
-    if (!deviceId.contains("#")) {
+    if (!deviceId.contains(CHILDSEPARATOR)) {
       JsonObject reading = this.deviceReadings.get(deviceId);
 
       JsonObject response = new JsonObject()
@@ -688,8 +692,8 @@ public class OwfsAdapter extends AbstractAdapter {
 
       return response;
     } else {
-      JsonObject reading = this.deviceReadings.get(deviceId.split("#")[0]); // Get value from parent.
-      int index = Integer.parseInt(deviceId.split("#")[1]) - 1;         // Get child idsuffix.
+      JsonObject reading = this.deviceReadings.get(deviceId.split(CHILDSEPARATOR)[0]); // Get value from parent.
+      int index = Integer.parseInt(deviceId.split(CHILDSEPARATOR)[1]) - 1;         // Get child idsuffix.
       String value = reading.getJsonObject("lastReading").getString("value").split(",")[index];  // Get child reading from parent reading.
 
       JsonObject response = new JsonObject()
