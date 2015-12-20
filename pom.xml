@@ -16,12 +16,14 @@
       <id>trycoon</id>
       <name>Henrik Östman</name>
       <email>trycoon@gmail.com</email>
+      <organization>liquidbytes.se</organization>
     </developer>
   </developers>
     
   <modules>
     <module>jel-server</module>
     <!--<module>jel-client</module>-->
+    <module>plugins/Nexahome/nexahome</module>
   </modules>
 
   <licenses>
@@ -130,7 +132,29 @@
           </execution>-->
         </executions>
       </plugin>
+                 
+      <!-- http://www.jayway.com/2012/04/07/continuous-deployment-versioning-and-git/ -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>buildnumber-maven-plugin</artifactId>
+        <version>1.1</version>
+        <executions>
+          <execution>
+            <phase>validate</phase>
+            <goals>
+              <goal>create</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
+    <resources>
+      <resource>
+        <!-- Adds ${buildNumber} to buildNumber.properties -->
+        <directory>${basedir}/src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
   </build>
 </project>
 
