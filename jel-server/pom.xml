@@ -15,6 +15,15 @@
     <version>1.0.0</version>
   </parent>
 
+  <developers>
+    <developer>
+      <id>trycoon</id>
+      <name>Henrik Östman</name>
+      <email>trycoon@gmail.com</email>
+      <organization>liquidbytes.se</organization>
+    </developer>
+  </developers>
+  
   <licenses>
     <license>
       <name>Apache License, Version 2.0</name>
@@ -24,13 +33,11 @@
   </licenses>
   
   <properties>
-    <vertx.version>3.1.0</vertx.version>
-    <orientdb.version>2.0.2</orientdb.version>
+    <vertx.version>3.2.0</vertx.version>
+    <orientdb.version>2.1.8</orientdb.version>
     <args4j.version>2.0.29</args4j.version>
-    <groovy.version>2.4.3</groovy.version>
-    <ruby.version>1.7.20</ruby.version>
     <log4j.version>2.3</log4j.version>
-    <handlebars.version>2.2.2</handlebars.version>
+    <handlebars.version>3.2.0</handlebars.version>
     <junit.version>4.11</junit.version>
     <hazelcast.version>3.5</hazelcast.version>
   </properties>
@@ -65,18 +72,6 @@
       <artifactId>args4j</artifactId>
       <version>${args4j.version}</version>
     </dependency>
-    <!-- Groovy dependencies, for verticles written in Groovy -->
-    <!--<dependency>
-      <groupId>org.codehaus.groovy</groupId>
-      <artifactId>groovy-all</artifactId>
-      <version>${groovy.version}</version>
-    </dependency>-->
-    <!-- Ruby dependencies, for verticles written in Ruby -->
-    <!--<dependency>
-      <groupId>org.jruby</groupId>
-      <artifactId>jruby-complete</artifactId>
-      <version>${ruby.version}</version>
-    </dependency>-->
     <!-- Logging dependencies -->	
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
@@ -129,16 +124,6 @@
       <artifactId>vertx-lang-js</artifactId>
       <version>${vertx.version}</version>
     </dependency>
-    <!--<dependency>
-      <groupId>io.vertx</groupId>
-      <artifactId>vertx-lang-groovy</artifactId>
-      <version>${vertx.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.vertx</groupId>
-      <artifactId>vertx-lang-ruby</artifactId>
-      <version>${vertx.version}</version>
-    </dependency>-->
     <dependency>
       <groupId>com.cyngn.vertx</groupId>
       <artifactId>vertx-util</artifactId>
@@ -157,8 +142,8 @@
     </dependency>
     <!-- Handlebars dependencies -->	
     <dependency>
-      <groupId>com.github.jknack</groupId>
-      <artifactId>handlebars</artifactId>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-web-templ-handlebars</artifactId>
       <version>${handlebars.version}</version>
     </dependency>
     <!-- Pi4j dependencies, Raspberry Pi support -->
@@ -252,7 +237,7 @@
           </execution>
         </executions>
       </plugin>
-    </plugins>
+     </plugins>
   </build>
 
   <reporting>

@@ -28,6 +28,7 @@ import io.vertx.core.json.JsonObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -47,6 +48,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 
 /**
@@ -56,9 +58,11 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 public class SystemInfo {
 
   private final static String VERSION_FILE = "VERSION";
+  private final static String BUILDNUMBER_FILE = "buildNumber.properties";
   private final static String uptimeStart = LocalDateTime.now().toString();
   // Cache some frequent used information.
   private static Map<String, String> cpuInfo;
+  private static String buildNumber;
   private static String jelVersion;
 
   /**
@@ -106,6 +110,44 @@ public class SystemInfo {
   }
 
   /**
+   * Get buildnumber (Git SHA-1) for this build of JEL. eg. "35d99574ef081d6a00ec126db776b87ce0a66c22".
+   *
+   * @return buildnumber-string
+   */
+  public static String getBuildNumber() throws JelException {
+    if (buildNumber != null) {
+      return buildNumber;
+    } else {
+      synchronized (Settings.class) {
+        if (buildNumber != null) {
+          return buildNumber;
+        } else {
+
+          InputStream inputStream = Settings.class.getClassLoader().getResourceAsStream(BUILDNUMBER_FILE);
+
+          try {
+            Properties properties = new Properties();
+            properties.load(inputStream);
+            buildNumber = properties.getProperty("git-sha-1");
+          } catch (IOException ex) {
+            throw new JelException(String.format("Failed to read buildnumber value from %s-file.", BUILDNUMBER_FILE), ex);
+          } finally {
+            if (inputStream != null) {
+              try {
+                inputStream.close();
+              } catch (IOException ex) {
+                // Ignore
+              }
+            }
+          }
+
+          return buildNumber;
+        }
+      }
+    }
+  }
+
+  /**
    * Compare the provided version to the JEL server version.
    *
    * @param version semver string (semver.org) , e.g. "1.0.0" or "2.10.1".
@@ -145,6 +187,7 @@ public class SystemInfo {
     builder.append("\n");
     builder.append("__[SYSTEM INFORMATION]____________________________").append("\n").append("\n");
     builder.append("JEL version: ").append(getVersion()).append("\n");
+    builder.append("JEL buildnumber: ").append(getBuildNumber()).append("\n");
     builder.append("\n");
     builder.append("OS name: ").append(getOsName()).append("\n");
     builder.append("OS architecture: ").append(getOsArchitecture()).append("\n");
@@ -175,6 +218,7 @@ public class SystemInfo {
     JsonObject info = new JsonObject();
 
     info.put("applicationVersion", getVersion());
+    info.put("applicationBuildnumber", getBuildNumber());
     info.put("applicationStarttime", GetApplicationStarttime());
     info.put("serverCurrenttime", LocalDateTime.now().toString());
 

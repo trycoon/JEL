@@ -10,6 +10,14 @@
   <artifactId>jel-server</artifactId>
   <name>JEL - Server</name>
   <version>1.0.0</version>
+  <developers>
+    <developer>
+      <id>trycoon</id>
+      <name>Henrik Östman</name>
+      <email>trycoon@gmail.com</email>
+      <organization>liquidbytes.se</organization>
+    </developer>
+  </developers>
   <licenses>
     <license>
       <name>Apache License, Version 2.0</name>
@@ -96,15 +104,13 @@
     </plugins>
   </reporting>
   <properties>
-    <args4j.version>2.0.29</args4j.version>
-    <ruby.version>1.7.20</ruby.version>
-    <junit.version>4.11</junit.version>
+    <vertx.version>3.2.0</vertx.version>
+    <orientdb.version>2.1.8</orientdb.version>
+    <handlebars.version>3.2.0</handlebars.version>
     <hazelcast.version>3.5</hazelcast.version>
-    <orientdb.version>2.0.2</orientdb.version>
-    <handlebars.version>2.2.2</handlebars.version>
     <log4j.version>2.3</log4j.version>
-    <vertx.version>3.1.0</vertx.version>
-    <groovy.version>2.4.3</groovy.version>
+    <args4j.version>2.0.29</args4j.version>
+    <junit.version>4.11</junit.version>
   </properties>
 </project>
 

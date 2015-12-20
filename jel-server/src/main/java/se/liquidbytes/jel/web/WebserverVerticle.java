@@ -19,7 +19,6 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
-import static io.vertx.core.http.HttpHeaders.CONTENT_TYPE;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.json.JsonArray;
@@ -214,9 +213,10 @@ public class WebserverVerticle extends AbstractVerticle {
    * @return Router with added handler.
    */
   private Router staticHandler(Router router) {
-    StaticHandler staticHandler = StaticHandler.create();
-    staticHandler.setCachingEnabled(!Settings.isDebug()); // Disable caching when running in debug/development-mode
+    StaticHandler staticHandler = StaticHandler.create().setWebRoot("web");
+    staticHandler.setCachingEnabled(!Settings.isDebug()).setMaxAgeSeconds(3600 * 24 * 180); // 180 days caching, disabled when running in debug/development-mode.
     router.route("/assets/*").handler(staticHandler);
+
     return router;
   }
 
@@ -247,14 +247,9 @@ public class WebserverVerticle extends AbstractVerticle {
    * @return Router with added handler.
    */
   private Router apiRouter() {
-    /*
-     * TODO : provide authentication through the AuthService / AuthProvider instead of a custom api handler
-     * TODO : every page except login must be private TODO : use FormLoginHandler for the actual login form TODO : use RedirectAuthHandler for "/private"
-     */
-
     //TODO: Add CORS support using a --cors argument to JEL. https://github.com/vert-x3/vertx-examples/blob/master/web-examples/src/main/java/io/vertx/example/web/cors/Server.java
     Router router = Router.router(vertx);
-    //TODO: Add support for XML/PLIST and more?
+
     router.route().consumes("application/json");
     router.route().produces("application/json");
 
@@ -263,30 +258,7 @@ public class WebserverVerticle extends AbstractVerticle {
 
     router.route().handler(BodyHandler.create().setBodyLimit(1024 * 5000)); // Max 5 MiB upload limit
     router.route().handler((RoutingContext con) -> {
-      String reqContentType = con.request().getHeader(CONTENT_TYPE.toString());
-
-      // If contenttype has not been specified as a header, look for it in the query-string
-      if (reqContentType == null) {
-        if (con.request().query() != null) {
-          // Arrays.asList(con.request().query().split("&")).; //TODO: Find querystring library in vert.x.
-        }
-      }
-
-      // If no contenttype has been specified, fallback to JSON.
-      if (reqContentType == null) {
-        reqContentType = "application/json";
-      }
-
-      switch (reqContentType) {
-        case "application/xml": {
-          con.response().headers().add(CONTENT_TYPE, "application/xml");
-          break;
-        }
-        default: {
-          con.response().headers().add(CONTENT_TYPE, "application/json");
-        }
-      }
-
+      con.response().putHeader("content-type", con.getAcceptableContentType());
       con.next();
     });
 
@@ -377,7 +349,7 @@ public class WebserverVerticle extends AbstractVerticle {
   private SockJSHandler eventBusHandler() {
     SockJSHandler handler = SockJSHandler.create(vertx);
 
-    // TODO: Add new eventbus code for vertx-3.1
+    // TODO: Add new eventbus code for vertx-3.2
     return handler;
   }
 }
