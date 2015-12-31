@@ -32,6 +32,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.owfs.jowfsclient.Enums;
 import org.owfs.jowfsclient.OwfsConnection;
@@ -62,13 +65,14 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private final static int MAX_ATTEMPTS = 5;
   /**
-   * Delay between polling 1-wire bus for available devices.
+   * Delay between polling 1-wire bus for available devices (milliseconds).
    */
-  private final static int POLL_PRESENCE_DELAY = 3000;
+  private final static int POLL_PRESENCE_DELAY = 10000;
   /**
-   * Delay between polling 1-wire bus for value-changes.
+   * Delay between polling 1-wire bus for value-changes (milliseconds). This is the delay we are aiming for, a slow bus with lot's of slow devices may delay a
+   * full bus-poll for many many seconds. And there is not that much we could do about it here.
    */
-  private final static int POLL_VALUE_DELAY = 4000; //TODO: Set to 1000 when "simultaneous" is implemented.
+  private final static int POLL_VALUE_DELAY = 4000;
   /**
    * Character that separates a parent id from a child id. (Must be URL compatible)
    */
@@ -86,14 +90,6 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private int port;
   /**
-   * Presence pollhandler id, saved to be able to cancel pollhandler when we should shutdown.
-   */
-  private long pollPresenceHandlerId;
-  /**
-   * Value pollhandler id, saved to be able to cancel pollhandler when we should shutdown.
-   */
-  private long pollValueHandlerId;
-  /**
    * Device Id to device lookup table.
    */
   private Map<String, JsonObject> deviceLookup;
@@ -102,9 +98,21 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private Map<String, JsonObject> deviceReadings;
   /**
-   * Attempt counter
+   * Attempt counter, used togather with MAX_ATTEMPTS.
    */
   private int attempts;
+  /**
+   * Timestamp when presence of devices was run.
+   */
+  private long lastPresenceRun;
+  /**
+   * Timestamp when last sampling of devices values was run.
+   */
+  private long lastDeviceSamplingRun;
+  /**
+   * Thread pool (with one thread) used for running the thread that polls for present devices and for device value changes.
+   */
+  private ScheduledExecutorService pollOnewireExecutor;
 
   /**
    * Start method for adapter, will be called upon when adapter is expected to start up
@@ -116,18 +124,8 @@ public class OwfsAdapter extends AbstractAdapter {
     deviceReadings = new ConcurrentHashMap<>();
     this.setId(context.config().getString("adapterId"));
 
+    pollOnewireExecutor = Executors.newScheduledThreadPool(1);
     setupOwfsConnection();
-    scanAvailableDevices();
-
-    // Periodic poll buss for device changes (added/removed).
-    pollPresenceHandlerId = vertx.setPeriodic(POLL_PRESENCE_DELAY, id -> {
-      scanAvailableDevices();
-    });
-
-    // Periodic poll buss for current device values.
-    pollValueHandlerId = vertx.setPeriodic(POLL_VALUE_DELAY, id -> {
-      simultaneousReadValues();
-    });
 
     // Register this adapter to the eventbus so we could take requests and send notifications.
     // We register this adapter serveral times at different addresses on the eventbus, this is because there could be several instances of the adapter running on different IP-addresses and ports,
@@ -150,6 +148,10 @@ public class OwfsAdapter extends AbstractAdapter {
       handleRequest(message);
     });
 
+    scanAvailableDevices();
+    lastPresenceRun = lastDeviceSamplingRun = System.currentTimeMillis();
+    pollOnewireExecutor.scheduleAtFixedRate(pollOnewireTask(), 100, 10, TimeUnit.MILLISECONDS);  // Run device poll task every 10 ms. To see if any work need to be done.
+
     consumer.completionHandler(res -> {
       if (res.succeeded()) {
         logger.info("Owfs-adapter initialized to owserver running at {}:{}.", this.host, this.port);
@@ -165,14 +167,18 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   @Override
   public void stop() {
-    if (pollValueHandlerId > 0) {
-      vertx.cancelTimer(pollValueHandlerId);
-      pollValueHandlerId = 0;
-    }
 
-    if (pollPresenceHandlerId > 0) {
-      vertx.cancelTimer(pollPresenceHandlerId);
-      pollPresenceHandlerId = 0;
+    logger.info("Owfs-adapter for owserver running at {}:{} is preparing to shutdown.", this.host, this.port);
+
+    try {
+      pollOnewireExecutor.shutdown();
+      pollOnewireExecutor.awaitTermination(1, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      // Do nothing.
+    } finally {
+      pollOnewireExecutor.shutdownNow();
+      logger.debug("PollOnewire-threadpool for Owfs-adapter for owserver running at {}:{} is now shutdown.", this.host, this.port);
+      pollOnewireExecutor = null;
     }
 
     if (deviceLookup != null) {
@@ -315,21 +321,62 @@ public class OwfsAdapter extends AbstractAdapter {
   }
 
   /**
-   * Scan for available devices on 1-wire bus. And updates our internal list of available devices.
+   * Internal running thread for polling onewire bus for presence of devices and for device value changes.
+   *
+   * @return Task to run in threadpool.
+   */
+  private Runnable pollOnewireTask() {
+
+    Runnable task = () -> {
+
+      long currentTime = System.currentTimeMillis();
+      long presenceDelayOverdue = currentTime - lastPresenceRun - POLL_PRESENCE_DELAY;
+
+      if (presenceDelayOverdue > 0) {
+        if (presenceDelayOverdue >= POLL_PRESENCE_DELAY) {
+          logger.warn("Onewire adapter has been delayed({} ms) for too long between presence-detection runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", presenceDelayOverdue, this.getId(), this.host, this.port);
+        }
+
+        // TODO: Separate scanning and polling/setting values to two separate threads with two owserver-connections to be able to scan for new devices at the same time we are polling for samples. http://owfs.org/index.php?page=directory-locking
+        scanAvailableDevices();
+        lastPresenceRun = currentTime;
+      }
+
+      currentTime = System.currentTimeMillis();
+      long sampleDelayOverdue = currentTime - lastDeviceSamplingRun - POLL_VALUE_DELAY;
+
+      if (sampleDelayOverdue > 0) {
+        if (sampleDelayOverdue >= POLL_VALUE_DELAY) {
+          logger.warn("Onewire adapter has been delayed({} ms) for too long between samples runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", sampleDelayOverdue, this.getId(), this.host, this.port);
+        }
+
+        simultaneousReadValues();
+        lastDeviceSamplingRun = currentTime;
+      }
+    };
+
+    return task;
+  }
+
+  /**
+   * Scan for available devices on 1-wire bus. And updates our internal list of available devices. Note this is a blocking call!
    */
   private void scanAvailableDevices() {
     try {
-      String deviceId, deviceType, deviceFamily;
+      String deviceId, deviceType, deviceFamily, isPowered;
       Set<String> foundDeviceIds = new HashSet<>();
       EventBus eb = vertx.eventBus();
       JsonObject device, childDevice, broadcastDevice;
 
+      logger.debug("Scanning for available devices on Owserver at {}:{} with id \"{}\".", this.host, this.port, this.getId());
       List<String> owDevices = owfs.listDirectoryAll("/uncached");  // Bypass owservers internal cache, so we are sure we get fresh info.
+      logger.debug("Found {} devices on Owserver at {}:{} with id \"{}\".", owDevices.size(), this.host, this.port, this.getId());
 
       for (String owDevice : owDevices) {
         deviceId = owfs.read(owDevice + "/id");
         deviceType = owfs.read(owDevice + "/type");
         deviceFamily = owfs.read(owDevice + "/family");
+        isPowered = owfs.read(owDevice + "/power");
         foundDeviceIds.add(deviceId);
 
         device = deviceLookup.get(deviceId);
@@ -346,6 +393,7 @@ public class OwfsAdapter extends AbstractAdapter {
                 logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{} with id \"{}\".", path, command.getString("value"), deviceId, this.host, this.port, this.getId());
 
                 owfs.write(path, command.getString("value"));
+                // TODO: After a hardware reset we need to rerun this procedure, is there a way for us to detect a hardware reset?
               }
             }
 
@@ -532,94 +580,96 @@ public class OwfsAdapter extends AbstractAdapter {
   private void simultaneousReadValues() {
     List<JsonObject> devices = getParentDevicesOnly();
 
-    //TODO: echo "1" > /simultaneous/temperature, and others.
+    String id = null;
+    String time;
+    String value;
+    JsonObject reading;
+    JsonObject readings;
+
+    try {
+      // Simultaneous conversion: http://owfs-developers.1086194.n5.nabble.com/Missing-data-td10904i20.html
+      //TODO: echo "1" > /simultaneous/temperature, and others.
+      owfs.write("/simultaneous/temperature", "1");
+    } catch (IOException ex) {
+      logger.error("some error", ex);
+    } catch (OwfsException ex) {
+      logger.error("some other error", ex);
+    }
+
     for (JsonObject device : devices) {
-      // Execute each device reading in a background thread, this to not lockup this thread waiting for responses.
-      vertx.executeBlocking(future -> {
-        try {
-          String id = device.getString("id");
+      try {
+        id = device.getString("id");
 
-          // Do a blocking reading.
-          String value = readValue(device);
-          logger.trace("Read value '{}' from device with id '{}' on Owserver at {}:{} with id \"{}\".", value, id, this.host, this.port, this.getId());
+        // Do a blocking reading.
+        value = readValue(device);
+        time = LocalDateTime.now().toString();
+        logger.trace("Read value '{}' from device with id '{}' on Owserver at {}:{} with adapter id \"{}\".", value, id, this.host, this.port, this.getId());
 
-          // Construct returnvalue.
-          future.complete(new JsonObject()
-              .put("id", id)
-              .put("time", LocalDateTime.now().toString())
-              .put("value", value)
-          );
-        } catch (Exception ex) {
-          future.fail(ex);
+        reading = new JsonObject()
+            .put("id", id)
+            .put("value", value)
+            .put("time", time);
+
+        // Get hold of array of recorded readings for this specific device.
+        if (!deviceReadings.containsKey(id)) {
+          readings = new JsonObject()
+              .put("lastReading", new JsonObject()
+                  .put("value", (Object) null) // Set property to prevent a possible nullpointer exception later.
+              );
+
+          deviceReadings.put(id, readings);
+        } else {
+          readings = deviceReadings.get(id);
         }
-      }, res -> {
-        if (res.succeeded()) {
-          JsonObject readings;
-          JsonObject reading = (JsonObject) res.result();
-          String id = reading.getString("id");
-          String value = reading.getString("value");
 
-          // Get hold of array of recorded readings for this specific device.
-          if (!deviceReadings.containsKey(id)) {
-            readings = new JsonObject()
-                .put("lastReading", new JsonObject()
-                    .put("value", (Object) null) // Set property to prevent a possible nullpointer exception later.
-                );
+        String lastValue = readings.getJsonObject("lastReading").getString("value");
+        // Only add this reading to list of readings for device if the value of the reading has changed since the last time we did a reading. We save a lot of space and memory by doing this!
+        if (!value.equals(lastValue)) {
+          readings.put("lastReading", reading);
+          logger.info("Recorded new value '{}' at time '{}' for device with id '{}' on Owserver at {}:{} with id \"{}\".", value, time, id, this.host, this.port, this.getId());
 
-            deviceReadings.put(id, readings);
+          List<JsonObject> childs = getChildDevicesOnly(id);
+
+          if (childs.isEmpty()) {
+            // This device has no children, so we just notify that this device has a value that has changed.
+            JsonObject broadcast = new JsonObject()
+                .put("adapterId", this.getId())
+                .put("port", this.port)
+                .put("host", this.host)
+                .put("reading", reading);
+
+            vertx.eventBus().publish(EVENTBUS_DEVICES, broadcast, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICE_NEWREADING));
           } else {
-            readings = deviceReadings.get(id);
-          }
+            // This is a parent device so we must check which of its children  that has changed and notify each and every one of them on the bus.
+            String[] childValues = value.split(",");
+            String[] lastChildValues;
 
-          String lastValue = readings.getJsonObject("lastReading").getString("value");
-          // Only add this reading to list of readings for device if the value of the reading has changed since the last time we did a reading. We save a lot of space and memory by doing this!
-          if (!value.equals(lastValue)) {
-            readings.put("lastReading", reading);
-            logger.info("Recorded new value '{}' at time '{}' for device with id '{}' on Owserver at {}:{} with id \"{}\".", value, reading.getString("time"), id, this.host, this.port, this.getId());
-
-            List<JsonObject> childs = getChildDevicesOnly(id);
-
-            if (childs.isEmpty()) {
-              // This device has no children, so we just notify that this device has a value that has changed.
-              JsonObject broadcast = new JsonObject()
-                  .put("adapterId", this.getId())
-                  .put("port", this.port)
-                  .put("host", this.host)
-                  .put("reading", reading);
-
-              vertx.eventBus().publish(EVENTBUS_DEVICES, broadcast, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICE_NEWREADING));
+            if (lastValue == null) {
+              lastChildValues = new String[childValues.length];
             } else {
-              // This is a parent device so we must check which of its children  that has changed and notify each and every one of them on the bus.
-              String[] childValues = value.split(",");
-              String[] lastChildValues;
+              lastChildValues = lastValue.split(",");
+            }
 
-              if (lastValue == null) {
-                lastChildValues = new String[childValues.length];
-              } else {
-                lastChildValues = lastValue.split(",");
-              }
+            for (int i = 0; i < childValues.length; i++) {
+              if (!childValues[i].equals(lastChildValues[i])) {
+                JsonObject broadcast = new JsonObject()
+                    .put("adapterId", this.getId())
+                    .put("port", this.port)
+                    .put("host", this.host)
+                    .put("reading", new JsonObject()
+                        .put("id", childs.get(i).getString("id"))
+                        .put("time", reading.getString("time"))
+                        .put("value", childValues[i])
+                    );
 
-              for (int i = 0; i < childValues.length; i++) {
-                if (!childValues[i].equals(lastChildValues[i])) {
-                  JsonObject broadcast = new JsonObject()
-                      .put("adapterId", this.getId())
-                      .put("port", this.port)
-                      .put("host", this.host)
-                      .put("reading", new JsonObject()
-                          .put("id", childs.get(i).getString("id"))
-                          .put("time", reading.getString("time"))
-                          .put("value", childValues[i])
-                      );
-
-                  vertx.eventBus().publish(EVENTBUS_DEVICES, broadcast, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICE_NEWREADING));
-                }
+                vertx.eventBus().publish(EVENTBUS_DEVICES, broadcast, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICE_NEWREADING));
               }
             }
           }
-        } else {
-          logger.warn("Failed to read current value from device.", res.cause());
         }
-      });
+      } catch (Exception ex) {
+        logger.error("Failed to poll device '{}' for value on Owserver at {}:{} with adapter id \"{}\".", id, this.host, this.port, this.getId());
+      }
     }
   }
 
