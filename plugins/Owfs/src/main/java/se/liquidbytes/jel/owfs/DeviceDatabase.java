@@ -92,6 +92,7 @@ public final class DeviceDatabase {
         .put("maxValue", "125")
         .put("minValue", "-55")
         .put("minSampleDelay", "1000")
+        .put("simultaneousPath", "/simultaneous/temperature")
         .put("valueReadPath", "/temperature");
     db.put("DS18S20", type);
 
@@ -109,6 +110,7 @@ public final class DeviceDatabase {
         .put("maxValue", "125")
         .put("minValue", "-55")
         .put("minSampleDelay", "1000")
+        .put("simultaneousPath", "/simultaneous/temperature")
         .put("valueReadPath", "/temperature");
     db.put(type.getString("typeId"), type);
 

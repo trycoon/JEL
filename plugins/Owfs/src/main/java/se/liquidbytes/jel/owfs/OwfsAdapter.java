@@ -21,9 +21,9 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.net.SocketException;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import static java.util.Comparator.comparing;
 import java.util.HashSet;
@@ -33,14 +33,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import org.owfs.jowfsclient.Enums;
-import org.owfs.jowfsclient.OwfsConnection;
-import org.owfs.jowfsclient.OwfsConnectionConfig;
-import org.owfs.jowfsclient.OwfsConnectionFactory;
-import org.owfs.jowfsclient.OwfsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.system.adapter.AbstractAdapter;
@@ -61,16 +56,12 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
   /**
-   * Consecutive attempts before request fails.
-   */
-  private final static int MAX_ATTEMPTS = 5;
-  /**
    * Delay between polling 1-wire bus for available devices (milliseconds).
    */
-  private final static int POLL_PRESENCE_DELAY = 10000;
+  private final static int POLL_PRESENCE_DELAY = 15000;
   /**
-   * Delay between polling 1-wire bus for value-changes (milliseconds). This is the delay we are aiming for, a slow bus with lot's of slow devices may delay a
-   * full bus-poll for many many seconds. And there is not that much we could do about it here.
+   * Delay between polling 1-wire bus for value-changes (milliseconds). This is the delay we are aiming for, it may take longer as a slow bus with lot's of slow
+   * devices may delay a full bus-poll for many many seconds. And there is not that much we could do about it here.
    */
   private final static int POLL_VALUE_DELAY = 4000;
   /**
@@ -78,9 +69,9 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private final static String CHILDSEPARATOR = "_";
   /**
-   * Connection to Owfs-driver
+   * Size of threadpools, should always be 1.
    */
-  private OwfsConnection owfs;
+  private final static int THREAD_POOL_SIZE = 1;
   /**
    * Host-setting for Owfs
    */
@@ -89,6 +80,21 @@ public class OwfsAdapter extends AbstractAdapter {
    * Port-setting for Owfs
    */
   private int port;
+
+  // Below we use several connections to owserver, this is to allow to send simultaneous request to owserver , e.g. set a value on a device at the same time we are scanning the bus for new devices. For some harwarecombinations this seems possible.
+  /**
+   * Connection used for polling 1-wire bus for new/departed devices.
+   */
+  private OwServerConnection presenceConnection;
+  /**
+   * Connection used for polling devices on 1-wire bus for new readings(samples).
+   */
+  private OwServerConnection pollDevicesConnection;
+  /**
+   * Connection used for setting values on devices on 1-wire bus.
+   */
+  private OwServerConnection setDeviceValueConnection;
+
   /**
    * Device Id to device lookup table.
    */
@@ -98,10 +104,6 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private Map<String, JsonObject> deviceReadings;
   /**
-   * Attempt counter, used togather with MAX_ATTEMPTS.
-   */
-  private int attempts;
-  /**
    * Timestamp when presence of devices was run.
    */
   private long lastPresenceRun;
@@ -110,22 +112,40 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private long lastDeviceSamplingRun;
   /**
-   * Thread pool (with one thread) used for running the thread that polls for present devices and for device value changes.
+   * Thread pool (with one thread) used for running the thread that polls for present devices.
    */
-  private ScheduledExecutorService pollOnewireExecutor;
+  private ScheduledThreadPoolExecutor pollPresenceExecutor;
+  /**
+   * Thread pool (with one thread) used for running the thread that poll for device value changes.
+   */
+  private ScheduledThreadPoolExecutor pollDevicesValueExecutor;
 
   /**
    * Start method for adapter, will be called upon when adapter is expected to start up
    */
   @Override
   public void start() {
-    attempts = 0;
     deviceLookup = new ConcurrentHashMap<>();
     deviceReadings = new ConcurrentHashMap<>();
     this.setId(context.config().getString("adapterId"));
 
-    pollOnewireExecutor = Executors.newScheduledThreadPool(1);
-    setupOwfsConnection();
+    pollPresenceExecutor = new ScheduledThreadPoolExecutor(THREAD_POOL_SIZE);
+    pollPresenceExecutor.setThreadFactory((Runnable r) -> {
+      Thread thread = Executors.defaultThreadFactory().newThread(r);
+      thread.setName("owfsAdapter-presence-" + thread.getName());
+      return thread;
+    });
+    pollPresenceExecutor.setMaximumPoolSize(THREAD_POOL_SIZE);
+
+    pollDevicesValueExecutor = new ScheduledThreadPoolExecutor(THREAD_POOL_SIZE);
+    pollDevicesValueExecutor.setThreadFactory((Runnable r) -> {
+      Thread thread = Executors.defaultThreadFactory().newThread(r);
+      thread.setName("owfsAdapter-devicesvalues" + thread.getName());
+      return thread;
+    });
+    pollDevicesValueExecutor.setMaximumPoolSize(THREAD_POOL_SIZE);
+
+    setupOwfsConnections();
 
     // Register this adapter to the eventbus so we could take requests and send notifications.
     // We register this adapter serveral times at different addresses on the eventbus, this is because there could be several instances of the adapter running on different IP-addresses and ports,
@@ -134,23 +154,21 @@ public class OwfsAdapter extends AbstractAdapter {
     MessageConsumer<String> consumer;
     consumer = eb.consumer(String.format("%s.%s", EVENTBUS_ADAPTERS, "_all"));
     consumer.handler(message -> {
-      attempts = 0;
       handleRequest(message);
     });
     consumer = eb.consumer(String.format("%s.%s", EVENTBUS_ADAPTERS, "owfs"));
     consumer.handler(message -> {
-      attempts = 0;
       handleRequest(message);
     });
     consumer = eb.consumer(String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, "owfs", this.host, this.port));
     consumer.handler(message -> {
-      attempts = 0;
       handleRequest(message);
     });
 
     scanAvailableDevices();
     lastPresenceRun = lastDeviceSamplingRun = System.currentTimeMillis();
-    pollOnewireExecutor.scheduleAtFixedRate(pollOnewireTask(), 100, 10, TimeUnit.MILLISECONDS);  // Run device poll task every 10 ms. To see if any work need to be done.
+    pollPresenceExecutor.scheduleAtFixedRate(pollPresenceTask(), POLL_PRESENCE_DELAY, POLL_PRESENCE_DELAY, TimeUnit.MILLISECONDS);
+    pollDevicesValueExecutor.scheduleAtFixedRate(pollDevicesValueTask(), 100, POLL_VALUE_DELAY, TimeUnit.MILLISECONDS);
 
     consumer.completionHandler(res -> {
       if (res.succeeded()) {
@@ -170,15 +188,27 @@ public class OwfsAdapter extends AbstractAdapter {
 
     logger.info("Owfs-adapter for owserver running at {}:{} is preparing to shutdown.", this.host, this.port);
 
+    pollPresenceExecutor.shutdown();
+    pollDevicesValueExecutor.shutdown();
+
     try {
-      pollOnewireExecutor.shutdown();
-      pollOnewireExecutor.awaitTermination(1, TimeUnit.SECONDS);
+      pollPresenceExecutor.awaitTermination(1, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
       // Do nothing.
     } finally {
-      pollOnewireExecutor.shutdownNow();
-      logger.debug("PollOnewire-threadpool for Owfs-adapter for owserver running at {}:{} is now shutdown.", this.host, this.port);
-      pollOnewireExecutor = null;
+      pollPresenceExecutor.shutdownNow();
+      logger.debug("PollPresence-threadpool for Owfs-adapter for owserver running at {}:{} is now shutdown.", this.host, this.port);
+      pollPresenceExecutor = null;
+    }
+
+    try {
+      pollDevicesValueExecutor.awaitTermination(1, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      // Do nothing.
+    } finally {
+      pollDevicesValueExecutor.shutdownNow();
+      logger.debug("PollDevicesValue-threadpool for Owfs-adapter for owserver running at {}:{} is now shutdown.", this.host, this.port);
+      pollDevicesValueExecutor = null;
     }
 
     if (deviceLookup != null) {
@@ -191,13 +221,17 @@ public class OwfsAdapter extends AbstractAdapter {
       deviceReadings = null;
     }
 
-    if (this.owfs != null) {
-      try {
-        this.owfs.disconnect();
-      } catch (IOException ex) {
-        logger.warn("Failed to disconnect from Owserver running at {}:{} when stopping Owserver-adapter.", this.host, this.port, ex);
-      }
-      this.owfs = null;
+    if (this.presenceConnection != null) {
+      this.presenceConnection.close();
+      this.presenceConnection = null;
+    }
+    if (this.pollDevicesConnection != null) {
+      this.pollDevicesConnection.close();
+      this.pollDevicesConnection = null;
+    }
+    if (this.setDeviceValueConnection != null) {
+      this.setDeviceValueConnection.close();
+      this.setDeviceValueConnection = null;
     }
   }
 
@@ -252,23 +286,7 @@ public class OwfsAdapter extends AbstractAdapter {
     } catch (DeviceMissingException ex) {
       logger.info("Trying to perform an action on a non existing device ({}) on Owserver with id \"{}\" running at {}:{}.", ex.getDeviceId(), this.getId(), this.host, this.port);
       message.fail(404, ex.getMessage());
-    } catch (SocketException ex) {
-      if (attempts > MAX_ATTEMPTS) {
-        logger.error("Failed to execute action \"{}\" on Owserver with id \"{}\" running at {}:{}, connection seems down. Done trying to reconnect.", action, this.getId(), this.host, this.port, ex);
-        message.fail(500, ex.getMessage());
-      } else {
-        attempts++;
-        logger.warn("Failed to execute action \"{}\" on Owserver with id \"{}\" running at {}:{}, connection seems down. Reconnect attempt# {}.", action, this.getId(), this.host, this.port, attempts, ex);
-        setupOwfsConnection();
-        // Wait one sec, to not SPAM us to death.
-        vertx.setTimer(1000, timeoutId -> {
-          handleRequest(message);
-        });
-      }
-    } catch (OwfsException ex) {
-      logger.error("Failed to execute action \"{}\" on Owserver with id \"{}\" running at {}:{}, got errorcode", action, this.getId(), this.host, this.port, ex.getErrorCode(), ex);
-      message.fail(500, ex.getMessage());
-    } catch (IOException ex) {
+    } catch (OwServerConnectionException ex) {
       logger.error("Failed to execute action \"{}\" on Owserver with id \"{}\" running at {}:{}.", action, this.getId(), this.host, this.port, ex);
       message.fail(500, ex.getMessage());
     }
@@ -292,28 +310,20 @@ public class OwfsAdapter extends AbstractAdapter {
   }
 
   /**
-   * Setup the connection to the Owfs-driver, this may be called upon several times in case we drop connections.
+   * Setup the connections to the Owserver.
    */
-  private void setupOwfsConnection() {
-    if (this.owfs != null) {
-      try {
-        owfs.disconnect();
-      } catch (IOException ex) {
-        // Ignore.
-      }
-      owfs = null;
-    }
-
+  private void setupOwfsConnections() {
     try {
       this.host = context.config().getString("address", "127.0.0.1");
       this.port = context.config().getInteger("port", 4304);
-      OwfsConnectionFactory factory = new OwfsConnectionFactory(this.host, this.port);
-      OwfsConnectionConfig config = factory.getConnectionConfig();
-      config.setDeviceDisplayFormat(Enums.OwDeviceDisplayFormat.F_DOT_I); // Display devices in format "10.67C6697351FF" (family-code.id)
-      config.setTemperatureScale(Enums.OwTemperatureScale.CELSIUS);       // Celsius is the default temperature-scale we use, we convert it in JEL to other formats if needed.
-      config.setPersistence(Enums.OwPersistence.ON);                      // User a persistent connection to owserver if possible
-      config.setBusReturn(Enums.OwBusReturn.OFF);                         // Only show the devices in directory-listings, we don't want to iterate over other directories (like "structure", "settings"...)
-      this.owfs = factory.createNewConnection();
+      this.presenceConnection = new OwServerConnection(this.host, this.port);
+      this.presenceConnection.connect();
+
+      this.pollDevicesConnection = new OwServerConnection(this.host, this.port);
+      this.pollDevicesConnection.connect();
+
+      this.setDeviceValueConnection = new OwServerConnection(this.host, this.port);
+      this.setDeviceValueConnection.connect();
     } catch (Exception ex) {
       logger.error("Error while trying to setup Owserver-connection to {}:{} for adapter with id \"{}\".", this.host, this.port, this.getId(), ex);
       throw ex;
@@ -321,38 +331,46 @@ public class OwfsAdapter extends AbstractAdapter {
   }
 
   /**
-   * Internal running thread for polling onewire bus for presence of devices and for device value changes.
+   * Internal running thread for polling onewire bus for presence of devices.
    *
    * @return Task to run in threadpool.
    */
-  private Runnable pollOnewireTask() {
+  private Runnable pollPresenceTask() {
 
     Runnable task = () -> {
 
       long currentTime = System.currentTimeMillis();
       long presenceDelayOverdue = currentTime - lastPresenceRun - POLL_PRESENCE_DELAY;
 
-      if (presenceDelayOverdue > 0) {
-        if (presenceDelayOverdue >= POLL_PRESENCE_DELAY) {
-          logger.warn("Onewire adapter has been delayed({} ms) for too long between presence-detection runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", presenceDelayOverdue, this.getId(), this.host, this.port);
-        }
-
-        // TODO: Separate scanning and polling/setting values to two separate threads with two owserver-connections to be able to scan for new devices at the same time we are polling for samples. http://owfs.org/index.php?page=directory-locking
-        scanAvailableDevices();
-        lastPresenceRun = currentTime;
+      if (presenceDelayOverdue >= POLL_PRESENCE_DELAY) {
+        logger.warn("Onewire adapter has been delayed({} ms) for too long between presence-detection runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", presenceDelayOverdue, this.getId(), this.host, this.port);
       }
 
-      currentTime = System.currentTimeMillis();
+      scanAvailableDevices();
+      lastPresenceRun = currentTime;
+    };
+
+    return task;
+  }
+
+  /**
+   * Internal running thread for polling onewire bus for device-value changes..
+   *
+   * @return Task to run in threadpool.
+   */
+  private Runnable pollDevicesValueTask() {
+
+    Runnable task = () -> {
+
+      long currentTime = System.currentTimeMillis();
       long sampleDelayOverdue = currentTime - lastDeviceSamplingRun - POLL_VALUE_DELAY;
 
-      if (sampleDelayOverdue > 0) {
-        if (sampleDelayOverdue >= POLL_VALUE_DELAY) {
-          logger.warn("Onewire adapter has been delayed({} ms) for too long between samples runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", sampleDelayOverdue, this.getId(), this.host, this.port);
-        }
-
-        simultaneousReadValues();
-        lastDeviceSamplingRun = currentTime;
+      if (sampleDelayOverdue >= POLL_VALUE_DELAY) {
+        logger.warn("Onewire adapter has been delayed({} ms) for too long between samples runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", sampleDelayOverdue, this.getId(), this.host, this.port);
       }
+
+      simultaneousReadValues();
+      lastDeviceSamplingRun = currentTime;
     };
 
     return task;
@@ -369,14 +387,14 @@ public class OwfsAdapter extends AbstractAdapter {
       JsonObject device, childDevice, broadcastDevice;
 
       logger.debug("Scanning for available devices on Owserver at {}:{} with id \"{}\".", this.host, this.port, this.getId());
-      List<String> owDevices = owfs.listDirectoryAll("/uncached");  // Bypass owservers internal cache, so we are sure we get fresh info.
+      List<String> owDevices = presenceConnection.listDirectoryAll();
       logger.debug("Found {} devices on Owserver at {}:{} with id \"{}\".", owDevices.size(), this.host, this.port, this.getId());
 
       for (String owDevice : owDevices) {
-        deviceId = owfs.read(owDevice + "/id");
-        deviceType = owfs.read(owDevice + "/type");
-        deviceFamily = owfs.read(owDevice + "/family");
-        isPowered = owfs.read(owDevice + "/power");
+        deviceId = presenceConnection.read(owDevice + "/id");
+        deviceType = presenceConnection.read(owDevice + "/type");
+        deviceFamily = presenceConnection.read(owDevice + "/family");
+
         foundDeviceIds.add(deviceId);
 
         device = deviceLookup.get(deviceId);
@@ -392,9 +410,18 @@ public class OwfsAdapter extends AbstractAdapter {
                 String path = owDevice + command.getString("path");
                 logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{} with id \"{}\".", path, command.getString("value"), deviceId, this.host, this.port, this.getId());
 
-                owfs.write(path, command.getString("value"));
-                // TODO: After a hardware reset we need to rerun this procedure, is there a way for us to detect a hardware reset?
+                presenceConnection.write(path, command.getString("value"));
+                // TODO: After a hardware reset we need to rerun this procedure, is there a way for us to detect a hardware reset (owfs statistics?)?
               }
+            }
+
+            try {
+              isPowered = presenceConnection.read(owDevice + "/power");
+              if (isPowered != null && isPowered.equals("0")) {
+                logger.warn("Device '{}' of type '{}' on Owserver at {}:{} with id \"{}\" is running on parasitic power, this will slow down the 1-wire network and is less reliable than a powered device.", deviceId, deviceType, this.host, this.port, this.getId());
+              }
+            } catch (OwServerConnectionException ex) {
+              // Ignore. Devices that don't support the power-property will throw an error, so we just ignore this device.
             }
 
             device = new JsonObject();
@@ -460,16 +487,7 @@ public class OwfsAdapter extends AbstractAdapter {
           }
         }
       }
-    } catch (SocketException ex) {
-      logger.warn("Failed to scan Owserver at {}:{} with id \"{}\" for available devices, connection seems down. Trying to reconnect.", this.host, this.port, this.getId(), ex);
-      try {
-        setupOwfsConnection();
-      } catch (Exception ex2) {
-        // Ignore.
-      }
-    } catch (OwfsException ex) {
-      logger.error("Error while trying to scan Owserver at {}:{} with id \"{}\" for available devices. Received errorcode: {}", this.host, this.port, this.getId(), ex.getErrorCode(), ex);
-    } catch (IOException ex) {
+    } catch (OwServerConnectionException ex) {
       logger.error("Error while trying to scan Owserver at {}:{} with id \"{}\" for available devices.", this.host, this.port, this.getId(), ex);
     }
   }
@@ -562,15 +580,13 @@ public class OwfsAdapter extends AbstractAdapter {
       }
 
       String path = device.getString("path") + typeInfo.getString("valueReadPath");
-      String value = owfs.read(path).trim();
+      String value = this.pollDevicesConnection.read(path).trim();
 
       return value;
     } catch (DeviceMissingException ex) {
       throw new PluginException(String.format("Failed to read value from device with id '%s', device is reported missing.", ex.getDeviceId()), ex);
-    } catch (IOException ex) {
+    } catch (OwServerConnectionException ex) {
       throw new PluginException(String.format("Failed to read value from device with id '%s'.", id), ex);
-    } catch (OwfsException ex) {
-      throw new PluginException(String.format("Failed to read value from device with id '%s', got errorcode: ", id, ex.getErrorCode()), ex);
     }
   }
 
@@ -585,15 +601,40 @@ public class OwfsAdapter extends AbstractAdapter {
     String value;
     JsonObject reading;
     JsonObject readings;
+    Instant startExecutionTime = Instant.now();
 
     try {
+      /*
+                Ok so what is all this you say?
+                We have just fetched a list of all our 1-wire devices and are just about to iterate thought them all to collect their current values, but there is something we may want to do first...
+                Most 1-wire devices are fairly fast to read from, the exception is temperature sensors and A/D-converters. The common used DS18S20 temperature sensor takes about 1000 ms for each reading,
+                normally they are all read by OWFS in a serial fassion which means that we query a sensor for its current readings, the query is blocked for the conversiontime of 1000ms and then we receive the result.
+                For a 1-wire network of nineteen DS18S20 sensors a full reading of all devices will take at least 19x1000ms, which is quite a long time if you expect fast visual feedback when temperature changes rapidly.
+                To ease this, the 1-wire protocol support the "Skip ROM" command which enable OWFS to start the conversion of ALL termperature sensors (and A/D-converters a.k.a DS2450) at the same time.
+                We then need to wait about 1000ms to let the conversion take place and then we can iterate throught all sensors and collect all readings, this makes this a more O(1) operation than a O(n), in best cases at least.
+
+                So what's the catch, well we have to write to "/simultaneous/temperature" and "/simultaneous/voltage" each time we want to start initiate a conversion if there exists any temperature sensors or A/D  converters on the 1-wire bus.
+                For the simultaneous reading to work all temperature sensors NEED to be powered, having the Vcc, Data, and GND-lines connected. OWFS will scan the bus and if any temperature sensors a running in "parasitic"-mode then all reading will happen in serial (take many seconds).
+                A fairly new version of OWFS is needed to be installed for this to work also.
+       */
       // Simultaneous conversion: http://owfs-developers.1086194.n5.nabble.com/Missing-data-td10904i20.html
-      //TODO: echo "1" > /simultaneous/temperature, and others.
-      owfs.write("/simultaneous/temperature", "1");
-    } catch (IOException ex) {
-      logger.error("some error", ex);
-    } catch (OwfsException ex) {
-      logger.error("some other error", ex);
+
+      List<String> simultaneousPaths = devices.stream().map(d -> d.getJsonObject("typeInfo").getString("simultaneousPath")).filter(d -> d != null && !d.isEmpty()).distinct().collect(Collectors.toList());
+
+      for (String path : simultaneousPaths) {
+        this.pollDevicesConnection.write(path, "1");
+      }
+
+      // If no temperature devices or AD-converters exists on the bus then there is no need to introduce a 1000ms delay penalty before reading all devices current values.
+      if (simultaneousPaths.size() > 0) {
+        try {
+          Thread.sleep(1000);
+        } catch (InterruptedException ex) {
+          // No nothing.
+        }
+      }
+    } catch (OwServerConnectionException ex) {
+      logger.warn("Failed to initiate simultaneous readings of devices on Owserver at {}:{} with adapter id \"{}\".", this.host, this.port, this.getId(), ex);
     }
 
     for (JsonObject device : devices) {
@@ -671,6 +712,8 @@ public class OwfsAdapter extends AbstractAdapter {
         logger.error("Failed to poll device '{}' for value on Owserver at {}:{} with adapter id \"{}\".", id, this.host, this.port, this.getId());
       }
     }
+
+    logger.debug("Reading all current device values took {}ms.", Duration.between(startExecutionTime, Instant.now()).toMillis());
   }
 
   /**
@@ -702,7 +745,7 @@ public class OwfsAdapter extends AbstractAdapter {
    * @param message eventbus message.
    * @throws DeviceMissingException throws exception if specified device does not exist.
    */
-  private void getDeviceValue(Message message) throws DeviceMissingException, IOException, OwfsException {
+  private void getDeviceValue(Message message) throws DeviceMissingException {
     // Validate and extract action-specific parameters.
     if (message.body() == null) {
       message.fail(400, "Missing parameters.");
@@ -727,7 +770,7 @@ public class OwfsAdapter extends AbstractAdapter {
    * @return device last recorded value.
    * @throws DeviceMissingException throws exception if specified device does not exist.
    */
-  private JsonObject getDeviceValue(String deviceId) throws DeviceMissingException, IOException, OwfsException {
+  private JsonObject getDeviceValue(String deviceId) throws DeviceMissingException {
 
     if (deviceId == null || !deviceLookup.containsKey(deviceId)) {
       throw new DeviceMissingException("Trying to perform a action on a non existing device.", deviceId);
@@ -762,8 +805,9 @@ public class OwfsAdapter extends AbstractAdapter {
    *
    * @param message eventbus message.
    * @throws DeviceMissingException throws exception if specified device does not exist.
+   * @throws OwServerConnectionException throws exception if command fails for any reason.
    */
-  private void setDeviceValue(Message message) throws DeviceMissingException, IOException, OwfsException {
+  private void setDeviceValue(Message message) throws DeviceMissingException, OwServerConnectionException {
     // Validate and extract action-specific parameters.
     if (message.body() == null) {
       message.fail(400, "Missing parameters.");
@@ -792,8 +836,9 @@ public class OwfsAdapter extends AbstractAdapter {
    * @param deviceId Id on device
    * @param value value to set on device.
    * @throws DeviceMissingException throws exception if specified device does not exist.
+   * @throws OwServerConnectionException throws exception if command fails for any reason.
    */
-  private void setDeviceValue(String deviceId, String value) throws DeviceMissingException, IOException, OwfsException {
+  private void setDeviceValue(String deviceId, String value) throws DeviceMissingException, OwServerConnectionException {
 
     if (deviceId == null || !deviceLookup.containsKey(deviceId)) {
       throw new DeviceMissingException("Trying to perform a action on a non existing device.", deviceId);
@@ -808,7 +853,7 @@ public class OwfsAdapter extends AbstractAdapter {
 
       logger.debug("Write value {} to device '{}'.", value, deviceId);
 
-      owfs.write(path, value);
+      this.setDeviceValueConnection.write(path, value);
     }
   }
 }
