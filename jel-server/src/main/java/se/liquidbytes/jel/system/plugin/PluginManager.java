@@ -380,7 +380,7 @@ public final class PluginManager {
     }
 
     if (SystemInfo.compareToServerVersion(plugin.getMinServerVersion()) > 0) {
-      throw new JelException(String.format("Your current installation of JEL is to old for this plugin. Plugin requires atleast version %s, you have version %s. Skipping plugin.", plugin.getMinServerVersion(), SystemInfo.getVersion()));
+      throw new JelException(String.format("Your current installation of JEL is to old for this plugin. Plugin requires at least version %s, you have version %s. Skipping plugin.", plugin.getMinServerVersion(), SystemInfo.getVersion()));
     }
 
     return plugin;

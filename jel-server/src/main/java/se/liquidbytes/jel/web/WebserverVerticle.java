@@ -221,27 +221,6 @@ public class WebserverVerticle extends AbstractVerticle {
   }
 
   /**
-   * Set up router for handling rendering of webpages.
-   *
-   * @param router Router to add handler to.
-   * @return Router with added handler.
-   */
-  /*private Router dynamicPages(Router router) {
-   HandlebarsTemplateEngine hbsEngine = HandlebarsTemplateEngine.create();
-   hbsEngine.setMaxCacheSize(0); /* no cache since we wan't hot-reload for templates */ //TODO: checkup this setting!
-
-  /* TemplateHandler templateHandler = TemplateHandler.create(hbsEngine);    //router.get("/private/*").handler(userContextHandler::fromSession);
-   router.getWithRegex(".+\\.hbs").handler(con -> {
-   final Session session = con.session();
-   con.data().put("userLogin", session.get("login"));
-   con.data().put("accessToken", session.get("accessToken"));
-
-   con.next();
-   });
-   router.getWithRegex(".+\\.hbs").handler(templateHandler);
-   return router;
-   }*/
-  /**
    * Set up router for handling REST API-requests.
    *
    * @return Router with added handler.
@@ -253,12 +232,12 @@ public class WebserverVerticle extends AbstractVerticle {
     router.route().consumes("application/json");
     router.route().produces("application/json");
 
-    router.route().consumes("application/xml");
-    router.route().produces("application/xml");
+    //router.route().consumes("application/xml");
+    //router.route().produces("application/xml");
 
     router.route().handler(BodyHandler.create().setBodyLimit(1024 * 5000)); // Max 5 MiB upload limit
     router.route().handler((RoutingContext con) -> {
-      con.response().putHeader("content-type", con.getAcceptableContentType());
+      con.response().putHeader("content-type", "application/json");
       con.next();
     });
 
