@@ -46,6 +46,11 @@ public class AdapterApi {
   public void listAdaptertypes(RoutingContext context) {
     service.listAvailableAdapterTypes((r) -> {
       if (r.succeeded()) {
+        /*r.result().forEach(a -> {
+          JsonObject adapter = (JsonObject) a;
+          adapter.put("supportedDevices", String.format("%s/adapters/%s/supportedDevices", API_ENDPOINT, adapter.getString("id")));
+          adapters.add(adapter);
+        });*/
         context.response().end(r.result().encodePrettily());
       } else {
         context.fail(r.cause());
@@ -69,7 +74,10 @@ public class AdapterApi {
     service.listAdapters((r) -> {
       if (r.succeeded()) {
         JsonArray adapters = new JsonArray();
-        r.result().forEach(adapter -> {
+        r.result().forEach(a -> {
+          JsonObject adapter = (JsonObject) a;
+          adapter.put("devices", String.format("%s/adapters/%s/devices", API_ENDPOINT, adapter.getString("id")));
+          adapter.put("supportedDevices", String.format("%s/adapters/%s/supportedDevices", API_ENDPOINT, adapter.getString("id")));
           adapters.add(adapter);
         });
 
@@ -94,7 +102,11 @@ public class AdapterApi {
 
     service.retrieveAdapter(adapterId, (r) -> {
       if (r.succeeded()) {
-        context.response().end(r.result().encodePrettily());
+        JsonObject adapter = r.result();
+        adapter.put("devices", String.format("%s/adapters/%s/devices", API_ENDPOINT, adapter.getString("id")));
+        adapter.put("supportedDevices", String.format("%s/adapters/%s/supportedDevices", API_ENDPOINT, adapter.getString("id")));
+
+        context.response().end(adapter.encodePrettily());
       } else {
         context.fail(r.cause());
       }

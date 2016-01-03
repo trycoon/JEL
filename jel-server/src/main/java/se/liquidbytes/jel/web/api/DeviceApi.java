@@ -17,9 +17,11 @@ package se.liquidbytes.jel.web.api;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import se.liquidbytes.jel.Settings;
+import static se.liquidbytes.jel.system.JelService.API_ENDPOINT;
 import se.liquidbytes.jel.system.JelServiceProxy;
 
 /**
@@ -44,7 +46,13 @@ public class DeviceApi {
   public void listAllDevices(RoutingContext context) {
     service.listAllDevices((r) -> {
       if (r.succeeded()) {
-        context.response().end(r.result().encodePrettily());
+        JsonArray deviceList = r.result();
+
+        /*deviceList.forEach(d -> {
+          JsonObject device = (JsonObject) d;
+          device.put("currentValue", String.format("%s/adapters/%s/devices/%s/value", API_ENDPOINT, adapterId, device.getString("id")));
+        });*/
+        context.response().end(deviceList.encodePrettily());
       } else {
         context.fail(r.cause());
       }
@@ -78,7 +86,13 @@ public class DeviceApi {
 
     service.listAdapterDevices(adapterId, (r) -> {
       if (r.succeeded()) {
-        context.response().end(r.result().encodePrettily());
+        JsonArray deviceList = r.result();
+
+        deviceList.forEach(d -> {
+          JsonObject device = (JsonObject) d;
+          device.put("currentValue", String.format("%s/adapters/%s/devices/%s/value", API_ENDPOINT, adapterId, device.getString("id")));
+        });
+        context.response().end(deviceList.encodePrettily());
       } else {
         context.fail(r.cause());
       }
@@ -114,7 +128,9 @@ public class DeviceApi {
 // As device id is unique we don't really need adapter id.
     service.retrieveAdapterDevice(deviceId, (r) -> {
       if (r.succeeded()) {
-        context.response().end(r.result().encodePrettily());
+        JsonObject device = (JsonObject) r.result();
+        device.put("currentValue", String.format("%s/adapters/%s/devices/%s/value", API_ENDPOINT, adapterId, deviceId));
+        context.response().end(device.encodePrettily());
       } else {
         context.fail(r.cause());
       }
