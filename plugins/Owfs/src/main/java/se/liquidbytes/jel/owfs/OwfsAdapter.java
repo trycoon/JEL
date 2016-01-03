@@ -389,7 +389,7 @@ public class OwfsAdapter extends AbstractAdapter {
 
       Instant startExecutionTime = Instant.now();
       logger.debug("Scanning for available devices on Owserver at {}:{} with id \"{}\".", this.host, this.port, this.getId());
-      List<String> owDevices = presenceConnection.listDirectory(false);
+      List<String> owDevices = presenceConnection.listDirectory(true);
       logger.debug("Found {} devices on Owserver at {}:{} with id \"{}\".", owDevices.size(), this.host, this.port, this.getId());
 
       for (String owDevice : owDevices) {

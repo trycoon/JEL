@@ -132,14 +132,17 @@ public class OwServerConnection {
     }
 
     try {
-      owDevices = owfs.listDirectory(useCache ? "/" : "/uncached").stream().filter(i -> i != null).collect(Collectors.toList()); // Get list and filter out possible null-values.
+      owDevices = owfs.listDirectory(useCache ? "/" : "/uncached")
+          .stream().filter(d -> d != null) // Filter out possible null-values.
+          .map(d -> !d.contains("/uncached") ? "/uncached" + d : d) // Make sure we return the uncached path to the devices regardless of whether we list devices using cache or not.
+          .collect(Collectors.toList());
       attempts = 1;
     } catch (SocketException ex) {
       if (attempts > MAX_ATTEMPTS) {
-        throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectoryAll\" on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %n attempts.", this.host, this.port, MAX_ATTEMPTS), ex);
+        throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectory\" on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %n attempts.", this.host, this.port, MAX_ATTEMPTS), ex);
       } else {
         attempts++;
-        logger.warn("Failed to execute action \"listDirectoryAll\" on Owserver running at {}:{}, connection seems down. Reconnect attempt# {}.", this.host, this.port, attempts, ex);
+        logger.warn("Failed to execute action \"listDirectory\" on Owserver running at {}:{}, connection seems down. Reconnect attempt# {}.", this.host, this.port, attempts, ex);
 
         connect();
         try {
@@ -151,9 +154,9 @@ public class OwServerConnection {
         }
       }
     } catch (OwfsException ex) {
-      throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectoryAll\" on Owserver running at %s:%s, got errorcode", this.host, this.port, ex.getErrorCode()), ex);
+      throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectory\" on Owserver running at %s:%s, got errorcode", this.host, this.port, ex.getErrorCode()), ex);
     } catch (IOException ex) {
-      throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectoryAll\" on Owserver running at %s:%s.", this.host, this.port), ex);
+      throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectory\" on Owserver running at %s:%s.", this.host, this.port), ex);
     }
 
     return owDevices;
