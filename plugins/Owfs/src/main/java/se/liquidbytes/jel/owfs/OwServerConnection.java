@@ -20,6 +20,7 @@ import java.lang.invoke.MethodHandles;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.owfs.jowfsclient.Enums;
 import org.owfs.jowfsclient.OwfsConnectionConfig;
 import org.owfs.jowfsclient.OwfsConnectionFactory;
@@ -76,7 +77,7 @@ public class OwServerConnection {
 
     this.host = host;
     this.port = port;
-    attempts = 0;
+    attempts = 1;
   }
 
   /**
@@ -119,10 +120,11 @@ public class OwServerConnection {
 
   /**
    * List all available devices on 1-wire bus.
+   * @param useCache use Owservers internal cache, much faster but may contain old values.
    * @throws OwServerConnectionException if execution fails
    * @return Returns list of path for all found devices.
    */
-  public List<String> listDirectoryAll() {
+  public List<String> listDirectory(boolean useCache) {
     List<String> owDevices = new ArrayList<>();
 
     if (owfs == null) {
@@ -130,8 +132,8 @@ public class OwServerConnection {
     }
 
     try {
-      owDevices = owfs.listDirectoryAll("/uncached");  // Bypass owservers internal cache, so we are sure we get fresh info.
-      attempts = 0;
+      owDevices = owfs.listDirectory(useCache ? "/" : "/uncached").stream().filter(i -> i != null).collect(Collectors.toList()); // Get list and filter out possible null-values.
+      attempts = 1;
     } catch (SocketException ex) {
       if (attempts > MAX_ATTEMPTS) {
         throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectoryAll\" on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %n attempts.", this.host, this.port, MAX_ATTEMPTS), ex);
@@ -143,7 +145,7 @@ public class OwServerConnection {
         try {
           // Wait one sec, to not SPAM us to death.
           Thread.sleep(1000);
-          return listDirectoryAll();
+          return listDirectory(useCache);
         } catch (InterruptedException ex1) {
           // Do nothing.
         }
@@ -172,7 +174,7 @@ public class OwServerConnection {
 
     try {
       value = owfs.read(path);
-      attempts = 0;
+      attempts = 1;
     } catch (SocketException ex) {
       if (attempts > MAX_ATTEMPTS) {
         throw new OwServerConnectionException(String.format("Failed to execute action \"read\" on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %n attempts.", this.host, this.port, MAX_ATTEMPTS), ex);
@@ -212,7 +214,7 @@ public class OwServerConnection {
 
     try {
       owfs.write(path, value);
-      attempts = 0;
+      attempts = 1;
     } catch (SocketException ex) {
       if (attempts > MAX_ATTEMPTS) {
         throw new OwServerConnectionException(String.format("Failed to execute action \"write\" on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %n attempts.", this.host, this.port, MAX_ATTEMPTS), ex);

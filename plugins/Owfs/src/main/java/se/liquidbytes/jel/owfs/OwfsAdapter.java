@@ -186,7 +186,7 @@ public class OwfsAdapter extends AbstractAdapter {
   @Override
   public void stop() {
 
-    logger.info("Owfs-adapter for owserver running at {}:{} is preparing to shutdown.", this.host, this.port);
+    logger.info("Owfs-adapter for owserver running at {}:{} is shutting down.", this.host, this.port);
 
     pollPresenceExecutor.shutdown();
     pollDevicesValueExecutor.shutdown();
@@ -242,7 +242,7 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   @Override
   public String getDescription() {
-    return "Adapter for supporting Dallas/Maxim 1-wire system using the open source library OWFS, http://owfs.org/";
+    return "Adapter for supporting Dallas/Maxim 1-wire system using the Open Source library OWFS, http://owfs.org/";
   }
 
   /**
@@ -346,8 +346,8 @@ public class OwfsAdapter extends AbstractAdapter {
         logger.warn("Onewire adapter has been delayed({} ms) for too long between presence-detection runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", presenceDelayOverdue, this.getId(), this.host, this.port);
       }
 
-      scanAvailableDevices();
       lastPresenceRun = currentTime;
+      scanAvailableDevices();
     };
 
     return task;
@@ -369,8 +369,8 @@ public class OwfsAdapter extends AbstractAdapter {
         logger.warn("Onewire adapter has been delayed({} ms) for too long between samples runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", sampleDelayOverdue, this.getId(), this.host, this.port);
       }
 
-      simultaneousReadValues();
       lastDeviceSamplingRun = currentTime;
+      simultaneousReadValues();
     };
 
     return task;
@@ -378,6 +378,7 @@ public class OwfsAdapter extends AbstractAdapter {
 
   /**
    * Scan for available devices on 1-wire bus. And updates our internal list of available devices. Note this is a blocking call!
+   *
    */
   private void scanAvailableDevices() {
     try {
@@ -386,8 +387,9 @@ public class OwfsAdapter extends AbstractAdapter {
       EventBus eb = vertx.eventBus();
       JsonObject device, childDevice, broadcastDevice;
 
+      Instant startExecutionTime = Instant.now();
       logger.debug("Scanning for available devices on Owserver at {}:{} with id \"{}\".", this.host, this.port, this.getId());
-      List<String> owDevices = presenceConnection.listDirectoryAll();
+      List<String> owDevices = presenceConnection.listDirectory(false);
       logger.debug("Found {} devices on Owserver at {}:{} with id \"{}\".", owDevices.size(), this.host, this.port, this.getId());
 
       for (String owDevice : owDevices) {
@@ -480,13 +482,18 @@ public class OwfsAdapter extends AbstractAdapter {
 
       for (String removeId : tempSet) {
         // Check that it's not a childdevice, we are not interested in them right now.
-        if (!removeId.contains("")) {
+        if (!removeId.contains(CHILDSEPARATOR)) {
+          // If device has children, remove these first.
           List<String> childDevicesId = tempSet.stream().filter(d -> d.startsWith(removeId + CHILDSEPARATOR)).collect(Collectors.toList());
           for (String childDeviceId : childDevicesId) {
             removeDeviceFromLookup(childDeviceId, eb);
           }
+          // Then remove device.
+          removeDeviceFromLookup(removeId, eb);
         }
       }
+
+      logger.debug("Scanning bus for devices took {}ms on Owserver at {}:{} with id \"{}\".", Duration.between(startExecutionTime, Instant.now()).toMillis(), this.host, this.port, this.getId());
     } catch (OwServerConnectionException ex) {
       logger.error("Error while trying to scan Owserver at {}:{} with id \"{}\" for available devices.", this.host, this.port, this.getId(), ex);
     }
@@ -607,15 +614,15 @@ public class OwfsAdapter extends AbstractAdapter {
       /*
                 Ok so what is all this you say?
                 We have just fetched a list of all our 1-wire devices and are just about to iterate thought them all to collect their current values, but there is something we may want to do first...
-                Most 1-wire devices are fairly fast to read from, the exception is temperature sensors and A/D-converters. The common used DS18S20 temperature sensor takes about 1000 ms for each reading,
-                normally they are all read by OWFS in a serial fassion which means that we query a sensor for its current readings, the query is blocked for the conversiontime of 1000ms and then we receive the result.
-                For a 1-wire network of nineteen DS18S20 sensors a full reading of all devices will take at least 19x1000ms, which is quite a long time if you expect fast visual feedback when temperature changes rapidly.
+                Most 1-wire devices are fairly fast to read from, the exception is temperature sensors and A/D-converters. The common used DS18S20 temperature sensor takes about 700 ms for each reading,
+                normally they are all read by OWFS in a serial fassion which means that we query a sensor for its current readings, the query is blocked for the conversiontime of 700 ms and then we receive the result.
+                For a 1-wire network of nineteen DS18S20 sensors a full reading of all devices will take at least 19x700 ms, which is quite a long time if you expect fast visual feedback when temperature changes rapidly.
                 To ease this, the 1-wire protocol support the "Skip ROM" command which enable OWFS to start the conversion of ALL termperature sensors (and A/D-converters a.k.a DS2450) at the same time.
-                We then need to wait about 1000ms to let the conversion take place and then we can iterate throught all sensors and collect all readings, this makes this a more O(1) operation than a O(n), in best cases at least.
+                We then need to wait about 700 ms to let the conversion take place and then we can iterate throught all sensors and collect all readings, this makes this a more O(1) operation than a O(n), in best cases at least.
 
                 So what's the catch, well we have to write to "/simultaneous/temperature" and "/simultaneous/voltage" each time we want to start initiate a conversion if there exists any temperature sensors or A/D  converters on the 1-wire bus.
                 For the simultaneous reading to work all temperature sensors NEED to be powered, having the Vcc, Data, and GND-lines connected. OWFS will scan the bus and if any temperature sensors a running in "parasitic"-mode then all reading will happen in serial (take many seconds).
-                A fairly new version of OWFS is needed to be installed for this to work also.
+                A fairly new version of OWFS is needed to be installed for this to work.
        */
       // Simultaneous conversion: http://owfs-developers.1086194.n5.nabble.com/Missing-data-td10904i20.html
 
@@ -623,15 +630,6 @@ public class OwfsAdapter extends AbstractAdapter {
 
       for (String path : simultaneousPaths) {
         this.pollDevicesConnection.write(path, "1");
-      }
-
-      // If no temperature devices or AD-converters exists on the bus then there is no need to introduce a 1000ms delay penalty before reading all devices current values.
-      if (simultaneousPaths.size() > 0) {
-        try {
-          Thread.sleep(1000);
-        } catch (InterruptedException ex) {
-          // No nothing.
-        }
       }
     } catch (OwServerConnectionException ex) {
       logger.warn("Failed to initiate simultaneous readings of devices on Owserver at {}:{} with adapter id \"{}\".", this.host, this.port, this.getId(), ex);
@@ -667,7 +665,7 @@ public class OwfsAdapter extends AbstractAdapter {
         // Only add this reading to list of readings for device if the value of the reading has changed since the last time we did a reading. We save a lot of space and memory by doing this!
         if (!value.equals(lastValue)) {
           readings.put("lastReading", reading);
-          logger.info("Recorded new value '{}' at time '{}' for device with id '{}' on Owserver at {}:{} with id \"{}\".", value, time, id, this.host, this.port, this.getId());
+          logger.debug("Recorded new value '{}' at time '{}' for device with id '{}' on Owserver at {}:{} with id \"{}\".", value, time, id, this.host, this.port, this.getId());
 
           List<JsonObject> childs = getChildDevicesOnly(id);
 
