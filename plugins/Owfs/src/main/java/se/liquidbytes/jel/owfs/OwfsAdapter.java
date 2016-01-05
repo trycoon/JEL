@@ -31,8 +31,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -58,12 +60,7 @@ public class OwfsAdapter extends AbstractAdapter {
   /**
    * Delay between polling 1-wire bus for available devices (milliseconds).
    */
-  private final static int POLL_PRESENCE_DELAY = 15000;
-  /**
-   * Delay between polling 1-wire bus for value-changes (milliseconds). This is the delay we are aiming for, it may take longer as a slow bus with lot's of slow
-   * devices may delay a full bus-poll for many many seconds. And there is not that much we could do about it here.
-   */
-  private final static int POLL_VALUE_DELAY = 4000;
+  private final static int POLL_PRESENCE_DELAY = 30000;
   /**
    * Character that separates a parent id from a child id. (Must be URL compatible)
    */
@@ -81,20 +78,14 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private int port;
 
-  // Below we use several connections to owserver, this is to allow to send simultaneous request to owserver , e.g. set a value on a device at the same time we are scanning the bus for new devices. For some harwarecombinations this seems possible.
   /**
-   * Connection used for polling 1-wire bus for new/departed devices.
+   * Queue of commands to execute on Owserver.
    */
-  private OwServerConnection presenceConnection;
+  private BlockingQueue<JsonObject> commandQueue;
   /**
-   * Connection used for polling devices on 1-wire bus for new readings(samples).
+   * Connection used for communicating with Owserver.
    */
-  private OwServerConnection pollDevicesConnection;
-  /**
-   * Connection used for setting values on devices on 1-wire bus.
-   */
-  private OwServerConnection setDeviceValueConnection;
-
+  private OwServerConnection owserverConnection;
   /**
    * Device Id to device lookup table.
    */
@@ -104,21 +95,13 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private Map<String, JsonObject> deviceReadings;
   /**
-   * Timestamp when presence of devices was run.
+   * Timestamp when last scan of 1-wire bus for devices was run.
    */
-  private long lastPresenceRun;
+  private long lastBusScanRun;
   /**
-   * Timestamp when last sampling of devices values was run.
+   * Thread pool (with one thread) used for running the main loop that detect and polls devices.
    */
-  private long lastDeviceSamplingRun;
-  /**
-   * Thread pool (with one thread) used for running the thread that polls for present devices.
-   */
-  private ScheduledThreadPoolExecutor pollPresenceExecutor;
-  /**
-   * Thread pool (with one thread) used for running the thread that poll for device value changes.
-   */
-  private ScheduledThreadPoolExecutor pollDevicesValueExecutor;
+  private ScheduledThreadPoolExecutor mainloopExecutor;
 
   /**
    * Start method for adapter, will be called upon when adapter is expected to start up
@@ -129,21 +112,15 @@ public class OwfsAdapter extends AbstractAdapter {
     deviceReadings = new ConcurrentHashMap<>();
     this.setId(context.config().getString("adapterId"));
 
-    pollPresenceExecutor = new ScheduledThreadPoolExecutor(THREAD_POOL_SIZE);
-    pollPresenceExecutor.setThreadFactory((Runnable r) -> {
-      Thread thread = Executors.defaultThreadFactory().newThread(r);
-      thread.setName("owfsAdapter-presence-" + thread.getName());
-      return thread;
-    });
-    pollPresenceExecutor.setMaximumPoolSize(THREAD_POOL_SIZE);
+    commandQueue = new LinkedBlockingQueue<>();
 
-    pollDevicesValueExecutor = new ScheduledThreadPoolExecutor(THREAD_POOL_SIZE);
-    pollDevicesValueExecutor.setThreadFactory((Runnable r) -> {
+    mainloopExecutor = new ScheduledThreadPoolExecutor(THREAD_POOL_SIZE);
+    mainloopExecutor.setThreadFactory((Runnable r) -> {
       Thread thread = Executors.defaultThreadFactory().newThread(r);
-      thread.setName("owfsAdapter-devicesvalues" + thread.getName());
+      thread.setName("owfsAdapter-mainloop-" + this.getId());
       return thread;
     });
-    pollDevicesValueExecutor.setMaximumPoolSize(THREAD_POOL_SIZE);
+    mainloopExecutor.setMaximumPoolSize(THREAD_POOL_SIZE);
 
     setupOwfsConnections();
 
@@ -165,10 +142,10 @@ public class OwfsAdapter extends AbstractAdapter {
       handleRequest(message);
     });
 
+    // Get initial list af devices.
     scanAvailableDevices();
-    lastPresenceRun = lastDeviceSamplingRun = System.currentTimeMillis();
-    pollPresenceExecutor.scheduleAtFixedRate(pollPresenceTask(), POLL_PRESENCE_DELAY, POLL_PRESENCE_DELAY, TimeUnit.MILLISECONDS);
-    pollDevicesValueExecutor.scheduleAtFixedRate(pollDevicesValueTask(), 100, POLL_VALUE_DELAY, TimeUnit.MILLISECONDS);
+    lastBusScanRun = System.currentTimeMillis();
+    mainloopExecutor.scheduleAtFixedRate(mainloopTask(), 1000, 50, TimeUnit.MILLISECONDS);
 
     consumer.completionHandler(res -> {
       if (res.succeeded()) {
@@ -188,27 +165,21 @@ public class OwfsAdapter extends AbstractAdapter {
 
     logger.info("Owfs-adapter for owserver running at {}:{} is shutting down.", this.host, this.port);
 
-    pollPresenceExecutor.shutdown();
-    pollDevicesValueExecutor.shutdown();
+    mainloopExecutor.shutdown();
 
     try {
-      pollPresenceExecutor.awaitTermination(1, TimeUnit.SECONDS);
+      mainloopExecutor.awaitTermination(1, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
       // Do nothing.
     } finally {
-      pollPresenceExecutor.shutdownNow();
-      logger.debug("PollPresence-threadpool for Owfs-adapter for owserver running at {}:{} is now shutdown.", this.host, this.port);
-      pollPresenceExecutor = null;
+      mainloopExecutor.shutdownNow();
+      logger.debug("mainloopExecutor-threadpool for Owfs-adapter for owserver running at {}:{} is now shutdown.", this.host, this.port);
+      mainloopExecutor = null;
     }
 
-    try {
-      pollDevicesValueExecutor.awaitTermination(1, TimeUnit.SECONDS);
-    } catch (InterruptedException e) {
-      // Do nothing.
-    } finally {
-      pollDevicesValueExecutor.shutdownNow();
-      logger.debug("PollDevicesValue-threadpool for Owfs-adapter for owserver running at {}:{} is now shutdown.", this.host, this.port);
-      pollDevicesValueExecutor = null;
+    if (this.owserverConnection != null) {
+      this.owserverConnection.close();
+      this.owserverConnection = null;
     }
 
     if (deviceLookup != null) {
@@ -219,19 +190,6 @@ public class OwfsAdapter extends AbstractAdapter {
     if (deviceReadings != null) {
       deviceReadings.clear();
       deviceReadings = null;
-    }
-
-    if (this.presenceConnection != null) {
-      this.presenceConnection.close();
-      this.presenceConnection = null;
-    }
-    if (this.pollDevicesConnection != null) {
-      this.pollDevicesConnection.close();
-      this.pollDevicesConnection = null;
-    }
-    if (this.setDeviceValueConnection != null) {
-      this.setDeviceValueConnection.close();
-      this.setDeviceValueConnection = null;
     }
   }
 
@@ -316,64 +274,12 @@ public class OwfsAdapter extends AbstractAdapter {
     try {
       this.host = context.config().getString("address", "127.0.0.1");
       this.port = context.config().getInteger("port", 4304);
-      this.presenceConnection = new OwServerConnection(this.host, this.port);
-      this.presenceConnection.connect();
-
-      this.pollDevicesConnection = new OwServerConnection(this.host, this.port);
-      this.pollDevicesConnection.connect();
-
-      this.setDeviceValueConnection = new OwServerConnection(this.host, this.port);
-      this.setDeviceValueConnection.connect();
+      this.owserverConnection = new OwServerConnection(this.host, this.port);
+      this.owserverConnection.connect();
     } catch (Exception ex) {
       logger.error("Error while trying to setup Owserver-connection to {}:{} for adapter with id \"{}\".", this.host, this.port, this.getId(), ex);
       throw ex;
     }
-  }
-
-  /**
-   * Internal running thread for polling onewire bus for presence of devices.
-   *
-   * @return Task to run in threadpool.
-   */
-  private Runnable pollPresenceTask() {
-
-    Runnable task = () -> {
-
-      long currentTime = System.currentTimeMillis();
-      long presenceDelayOverdue = currentTime - lastPresenceRun - POLL_PRESENCE_DELAY;
-
-      if (presenceDelayOverdue >= POLL_PRESENCE_DELAY) {
-        logger.warn("Onewire adapter has been delayed({} ms) for too long between presence-detection runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", presenceDelayOverdue, this.getId(), this.host, this.port);
-      }
-
-      lastPresenceRun = currentTime;
-      scanAvailableDevices();
-    };
-
-    return task;
-  }
-
-  /**
-   * Internal running thread for polling onewire bus for device-value changes..
-   *
-   * @return Task to run in threadpool.
-   */
-  private Runnable pollDevicesValueTask() {
-
-    Runnable task = () -> {
-
-      long currentTime = System.currentTimeMillis();
-      long sampleDelayOverdue = currentTime - lastDeviceSamplingRun - POLL_VALUE_DELAY;
-
-      if (sampleDelayOverdue >= POLL_VALUE_DELAY) {
-        logger.warn("Onewire adapter has been delayed({} ms) for too long between samples runs on Owserver with id \"{}\" running at {}:{}. This could be the result of too many devices on a single Onewire adapter, or many slow parasitic powered devices.", sampleDelayOverdue, this.getId(), this.host, this.port);
-      }
-
-      lastDeviceSamplingRun = currentTime;
-      simultaneousReadValues();
-    };
-
-    return task;
   }
 
   /**
@@ -389,13 +295,13 @@ public class OwfsAdapter extends AbstractAdapter {
 
       Instant startExecutionTime = Instant.now();
       logger.debug("Scanning for available devices on Owserver at {}:{} with id \"{}\".", this.host, this.port, this.getId());
-      List<String> owDevices = presenceConnection.listDirectory(true);
+      List<String> owDevices = owserverConnection.listDirectory(true);
       logger.debug("Found {} devices on Owserver at {}:{} with id \"{}\".", owDevices.size(), this.host, this.port, this.getId());
 
       for (String owDevice : owDevices) {
-        deviceId = presenceConnection.read(owDevice + "/id");
-        deviceType = presenceConnection.read(owDevice + "/type");
-        deviceFamily = presenceConnection.read(owDevice + "/family");
+        deviceId = owserverConnection.read(owDevice + "/id");
+        deviceType = owserverConnection.read(owDevice + "/type");
+        deviceFamily = owserverConnection.read(owDevice + "/family");
 
         foundDeviceIds.add(deviceId);
 
@@ -412,13 +318,13 @@ public class OwfsAdapter extends AbstractAdapter {
                 String path = owDevice + command.getString("path");
                 logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{} with id \"{}\".", path, command.getString("value"), deviceId, this.host, this.port, this.getId());
 
-                presenceConnection.write(path, command.getString("value"));
+                owserverConnection.write(path, command.getString("value"));
                 // TODO: After a hardware reset we need to rerun this procedure, is there a way for us to detect a hardware reset (owfs statistics?)?
               }
             }
 
             try {
-              isPowered = presenceConnection.read(owDevice + "/power");
+              isPowered = owserverConnection.read(owDevice + "/power");
               if (isPowered != null && isPowered.equals("0")) {
                 logger.warn("Device '{}' of type '{}' on Owserver at {}:{} with id \"{}\" is running on parasitic power, this will slow down the 1-wire network and is less reliable than a powered device.", deviceId, deviceType, this.host, this.port, this.getId());
               }
@@ -587,7 +493,7 @@ public class OwfsAdapter extends AbstractAdapter {
       }
 
       String path = device.getString("path") + typeInfo.getString("valueReadPath");
-      String value = this.pollDevicesConnection.read(path).trim();
+      String value = this.owserverConnection.read(path).trim();
 
       return value;
     } catch (DeviceMissingException ex) {
@@ -598,42 +504,38 @@ public class OwfsAdapter extends AbstractAdapter {
   }
 
   /**
-   * Read current values from all active devices simultaneously.
+   * Execute all possible queued commands to be written to Owserver.
    */
-  private void simultaneousReadValues() {
-    List<JsonObject> devices = getParentDevicesOnly();
+  private void executeQueuedCommands() {
+    JsonObject command;
+    String path, value;
 
+    while (commandQueue.size() > 0) {
+      try {
+        command = commandQueue.poll();
+        path = command.getString("path");
+        value = command.getString("value");
+
+        logger.debug("Write value {} to device '{}'.", value, path);
+
+        owserverConnection.write(path, value);
+      } catch (OwServerConnectionException ex) {
+        logger.error("Failed to execute queued command.", ex);
+      }
+    }
+  }
+
+  /**
+   * Collect all readings from a list of devices. (result is saved in deviceReadings)
+   *
+   * @param devices List of devices to read from.
+   */
+  private void collectDevicesReadings(List<JsonObject> devices) {
     String id = null;
     String time;
     String value;
     JsonObject reading;
     JsonObject readings;
-    Instant startExecutionTime = Instant.now();
-
-    try {
-      /*
-                Ok so what is all this you say?
-                We have just fetched a list of all our 1-wire devices and are just about to iterate thought them all to collect their current values, but there is something we may want to do first...
-                Most 1-wire devices are fairly fast to read from, the exception is temperature sensors and A/D-converters. The common used DS18S20 temperature sensor takes about 700 ms for each reading,
-                normally they are all read by OWFS in a serial fassion which means that we query a sensor for its current readings, the query is blocked for the conversiontime of 700 ms and then we receive the result.
-                For a 1-wire network of nineteen DS18S20 sensors a full reading of all devices will take at least 19x700 ms, which is quite a long time if you expect fast visual feedback when temperature changes rapidly.
-                To ease this, the 1-wire protocol support the "Skip ROM" command which enable OWFS to start the conversion of ALL termperature sensors (and A/D-converters a.k.a DS2450) at the same time.
-                We then need to wait about 700 ms to let the conversion take place and then we can iterate throught all sensors and collect all readings, this makes this a more O(1) operation than a O(n), in best cases at least.
-
-                So what's the catch, well we have to write to "/simultaneous/temperature" and "/simultaneous/voltage" each time we want to start initiate a conversion if there exists any temperature sensors or A/D  converters on the 1-wire bus.
-                For the simultaneous reading to work all temperature sensors NEED to be powered, having the Vcc, Data, and GND-lines connected. OWFS will scan the bus and if any temperature sensors a running in "parasitic"-mode then all reading will happen in serial (take many seconds).
-                A fairly new version of OWFS is needed to be installed for this to work.
-       */
-      // Simultaneous conversion: http://owfs-developers.1086194.n5.nabble.com/Missing-data-td10904i20.html
-
-      List<String> simultaneousPaths = devices.stream().map(d -> d.getJsonObject("typeInfo").getString("simultaneousPath")).filter(d -> d != null && !d.isEmpty()).distinct().collect(Collectors.toList());
-
-      for (String path : simultaneousPaths) {
-        this.pollDevicesConnection.write(path, "1");
-      }
-    } catch (OwServerConnectionException ex) {
-      logger.warn("Failed to initiate simultaneous readings of devices on Owserver at {}:{} with adapter id \"{}\".", this.host, this.port, this.getId(), ex);
-    }
 
     for (JsonObject device : devices) {
       try {
@@ -710,8 +612,122 @@ public class OwfsAdapter extends AbstractAdapter {
         logger.error("Failed to poll device '{}' for value on Owserver at {}:{} with adapter id \"{}\".", id, this.host, this.port, this.getId());
       }
     }
+  }
 
-    logger.debug("Reading all current device values took {}ms.", Duration.between(startExecutionTime, Instant.now()).toMillis());
+  /**
+   * Internal running thread for executing commands and polling 1-wire bus.
+   *
+   * @return Task to run in threadpool.
+   */
+  private Runnable mainloopTask() {
+
+    Runnable task = () -> {
+
+      /*
+                Ok so what is all this you say?
+                We have just fetched a list of all our 1-wire devices and are just about to iterate thought them all to collect their current values, but there is something we may want to do first...
+                Most 1-wire devices are fairly fast to read from, the exception is temperature sensors and A/D-converters. The common used DS18S20 temperature sensor takes about 700 ms for each reading,
+                normally they are all read by OWFS in a serial fassion which means that we query a sensor for its current readings, the query is blocked for the conversiontime of 700 ms and then we receive the result.
+                For a 1-wire network of nineteen DS18S20 sensors a full reading of all devices will take at least 19x700 ms, which is quite a long time to hog the 1-wire bus if you have other queued operations to execute on the bus.
+                To ease this, the 1-wire protocol support the "Skip ROM" command which enable OWFS to start the conversion of ALL termperature sensors (and A/D-converters a.k.a DS2450) at the same time.
+                We then need to wait about 700 ms to let the conversion take place and after that we can iterate throught all sensors and collect all readings very fast, this makes this a more O(1) operation than a O(n), in best cases at least.
+
+                So what's the catch, well we have to write to "/simultaneous/temperature" and "/simultaneous/voltage" each time we want to start initiate a conversion if there exists any temperature sensors or A/D  converters on the 1-wire bus.
+                For the simultaneous reading to work all temperature sensors NEED to be powered, having the Vcc, Data, and GND-lines connected. OWFS will scan the bus and if ANY temperature sensors are running in "parasitic"-mode then ALL reading will happen in serial (take many seconds).
+                A fairly new version of OWFS is needed to be installed for this to work. See: http://owfs-developers.1086194.n5.nabble.com/Missing-data-td10904i20.html
+
+                This is the mainloop that constantly polls for devicereadings and execute queued commands on the 1-write bus.
+                We first get all our devices that we have collected from busscans during earlier runs, then we separate them into different lists, one for slow temperature-sensors, one for slow voltage-sensors, and a list of other devices that we concider fast.
+                We start by sending any queued commands to the bus, that is commands that change a pin or state on a device, this is a farily fast operation and this is usually a operation where users expect fast feedback/low delay.
+                Then we trigger the start of conversion for thos slow temperature and voltage sensors, if we have any, then we read all fast devices while the slow ones doing their work.
+                By now hopefully the slow devices have finished and are ready to be read, so we read all slow devices.
+                Note that between many of the steps in the main loop we have put in checks for possible queued command that we should execute to get a fast responsetime.
+
+                Even now and then we scan the bus for new/removed devices, a busscan is a slow fragile operation that we don't want to execute too often.
+            */
+      List<JsonObject> allDevices, temperatureDevices, voltageDevices, fastDevices;
+      Instant commandsWrittenTime, simultaneousWrittenTime, fastDevicesReadTime, temperatureDevicesReadTime, voltageDevicesReadTime, busScanTime;
+      Duration commandsWrittenDuration, simultaneousWrittenDuration, fastDevicesReadDuration, temperatureDevicesDuration, voltageDevicesDuration, busScanDuration;
+      Instant startExecutionTime = Instant.now();
+
+      try {
+        allDevices = getParentDevicesOnly();
+        temperatureDevices = allDevices.stream().filter(d -> d.getJsonObject("typeInfo").containsKey("temperatureSensor") && d.getJsonObject("typeInfo").getBoolean("temperatureSensor")).collect(Collectors.toList());
+        voltageDevices = allDevices.stream().filter(d -> d.getJsonObject("typeInfo").getString("typeId").equals("DS2450")).collect(Collectors.toList());
+        fastDevices = allDevices;
+        fastDevices.removeAll(temperatureDevices);
+        fastDevices.removeAll(voltageDevices);
+      } catch (Exception ex) {
+        logger.error("Failed to parse list of devices in mainloop. Adapter will not function properly!", ex);
+        throw ex;
+      }
+
+      // Execute all queued commands.
+      executeQueuedCommands();
+      commandsWrittenTime = Instant.now();
+      commandsWrittenDuration = Duration.between(startExecutionTime, commandsWrittenTime);
+
+      try {
+        if (temperatureDevices.size() > 0) {
+          // If temperature sensors exists, start a simultaneous conversion on all of them.
+          owserverConnection.write("/simultaneous/temperature", "1");
+        }
+
+        if (voltageDevices.size() > 0) {
+          // If voltage sensors exists, start a simultaneous conversion on all of them.
+          owserverConnection.write("/simultaneous/voltage", "1");
+        }
+      } catch (OwServerConnectionException ex) {
+        logger.warn("Failed to initiate simultaneous readings of devices on Owserver at {}:{} with adapter id \"{}\". This may slow down adapter communication alot!", this.host, this.port, this.getId(), ex);
+      }
+      simultaneousWrittenTime = Instant.now();
+      simultaneousWrittenDuration = Duration.between(commandsWrittenTime, simultaneousWrittenTime);
+
+      // Collect readings on all 1-wire devices that are quite fast
+      collectDevicesReadings(fastDevices);
+      fastDevicesReadTime = Instant.now();
+      fastDevicesReadDuration = Duration.between(simultaneousWrittenTime, fastDevicesReadTime);
+
+      // Execute possible new queued commands.
+      executeQueuedCommands();
+      commandsWrittenTime = Instant.now();
+      commandsWrittenDuration.plus(Duration.between(fastDevicesReadTime, commandsWrittenTime));
+
+      // Collect readings on all temperature devices. Hopefully they are all done after the simultaneous conversion.
+      collectDevicesReadings(temperatureDevices);
+      temperatureDevicesReadTime = Instant.now();
+      temperatureDevicesDuration = Duration.between(commandsWrittenTime, temperatureDevicesReadTime);
+
+      // Execute possible new queued commands.
+      executeQueuedCommands();
+      commandsWrittenTime = Instant.now();
+      commandsWrittenDuration.plus(Duration.between(temperatureDevicesReadTime, commandsWrittenTime));
+
+      // Collect readings on all voltage devices. Hopefully they are all done after the simultaneous conversion.
+      collectDevicesReadings(voltageDevices);
+      voltageDevicesReadTime = Instant.now();
+      voltageDevicesDuration = Duration.between(commandsWrittenTime, voltageDevicesReadTime);
+
+      if (System.currentTimeMillis() - lastBusScanRun > POLL_PRESENCE_DELAY) {
+        lastBusScanRun = System.currentTimeMillis();
+        scanAvailableDevices();
+      }
+      busScanTime = Instant.now();
+      busScanDuration = Duration.between(voltageDevicesReadTime, busScanTime);
+
+      logger.debug("Mainloop execution statistics: command {}ms, simultaneous {}ms, fastdevices {}ms, temperaturedevices {}ms, voltagedevices {}ms, busscan {}ms.", commandsWrittenDuration, simultaneousWrittenDuration, fastDevicesReadDuration, temperatureDevicesDuration, voltageDevicesDuration, busScanDuration);
+
+      // If mainloop are run too fast, like when we have no devices connected, insert a artificial delay to not hog the CPU.
+      if (Duration.between(startExecutionTime, Instant.now()).toMillis() < 100) {
+        try {
+          Thread.sleep(300);
+        } catch (InterruptedException ex) {
+          // Do nothing.
+        }
+      }
+    };
+
+    return task;
   }
 
   /**
@@ -849,9 +865,8 @@ public class OwfsAdapter extends AbstractAdapter {
     if (typeInfo.containsKey("valueWritePath")) {
       String path = device.getString("path") + typeInfo.getString("valueWritePath");
 
-      logger.debug("Write value {} to device '{}'.", value, deviceId);
-
-      this.setDeviceValueConnection.write(path, value);
+      // Queue command. Record time so we could measure how long command has been queued before executed, if we want to.
+      this.commandQueue.offer(new JsonObject().put("path", path).put("value", value).put("nanoTime", System.nanoTime()));
     }
   }
 }

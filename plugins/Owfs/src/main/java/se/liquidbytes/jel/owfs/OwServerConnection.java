@@ -220,10 +220,10 @@ public class OwServerConnection {
       attempts = 1;
     } catch (SocketException ex) {
       if (attempts > MAX_ATTEMPTS) {
-        throw new OwServerConnectionException(String.format("Failed to execute action \"write\" on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %n attempts.", this.host, this.port, MAX_ATTEMPTS), ex);
+        throw new OwServerConnectionException(String.format("Failed to execute write to path '%s' with value '%s' on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %n attempts.", path, value, this.host, this.port, MAX_ATTEMPTS), ex);
       } else {
         attempts++;
-        logger.warn("Failed to execute action \"write\" on Owserver running at {}:{}, connection seems down. Reconnect attempt# {}.", this.host, this.port, attempts, ex);
+        logger.warn("Failed to execute write to path '%s' with value '%s' on Owserver running at {}:{}, connection seems down. Reconnect attempt# {}.", path, value, this.host, this.port, attempts, ex);
 
         connect();
         try {
@@ -235,9 +235,9 @@ public class OwServerConnection {
         }
       }
     } catch (OwfsException ex) {
-      throw new OwServerConnectionException(String.format("Failed to execute action \"write\" on Owserver running at %s:%s, got errorcode", this.host, this.port, ex.getErrorCode()), ex);
+      throw new OwServerConnectionException(String.format("Failed to execute write to path '%s' with value '%s' on Owserver running at %s:%s, got errorcode", path, value, this.host, this.port, ex.getErrorCode()), ex);
     } catch (IOException ex) {
-      throw new OwServerConnectionException(String.format("Failed to execute action \"write\" on Owserver running at %s:%s.", this.host, this.port), ex);
+      throw new OwServerConnectionException(String.format("Failed to execute write to path '%s' with value '%s' on Owserver running at %s:%s.", path, value, this.host, this.port), ex);
     }
   }
 }
