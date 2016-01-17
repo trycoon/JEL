@@ -25,6 +25,7 @@ import org.owfs.jowfsclient.Enums;
 import org.owfs.jowfsclient.OwfsConnectionConfig;
 import org.owfs.jowfsclient.OwfsConnectionFactory;
 import org.owfs.jowfsclient.OwfsException;
+import org.owfs.jowfsclient.alarm.AlarmingDevicesScanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +44,10 @@ public class OwServerConnection {
    * Consecutive attempts before request fails.
    */
   private final static int MAX_ATTEMPTS = 5;
+  /**
+   * Owfs-factory
+   */
+  private OwfsConnectionFactory factory;
   /**
    * Connection to Owfs-driver
    */
@@ -78,6 +83,14 @@ public class OwServerConnection {
     this.host = host;
     this.port = port;
     attempts = 1;
+
+    factory = new OwfsConnectionFactory(this.host, this.port);
+    OwfsConnectionConfig config = factory.getConnectionConfig();
+    config.setDeviceDisplayFormat(Enums.OwDeviceDisplayFormat.F_DOT_I); // Display devices in format "10.67C6697351FF" (family-code.id)
+    config.setTemperatureScale(Enums.OwTemperatureScale.CELSIUS);       // Celsius is the default temperature-scale we use, we convert it in JEL to other formats if needed.
+    config.setPersistence(Enums.OwPersistence.ON);                      // User a persistent connection to owserver if possible
+    config.setBusReturn(Enums.OwBusReturn.OFF);                         // Only show the devices in directory-listings, we don't want to iterate over other directories (like "structure", "settings"...)
+    factory.setConnectionConfig(config);
   }
 
   /**
@@ -94,13 +107,6 @@ public class OwServerConnection {
       owfs = null;
     }
 
-    OwfsConnectionFactory factory = new OwfsConnectionFactory(this.host, this.port);
-    OwfsConnectionConfig config = factory.getConnectionConfig();
-    config.setDeviceDisplayFormat(Enums.OwDeviceDisplayFormat.F_DOT_I); // Display devices in format "10.67C6697351FF" (family-code.id)
-    config.setTemperatureScale(Enums.OwTemperatureScale.CELSIUS);       // Celsius is the default temperature-scale we use, we convert it in JEL to other formats if needed.
-    config.setPersistence(Enums.OwPersistence.ON);                      // User a persistent connection to owserver if possible
-    config.setBusReturn(Enums.OwBusReturn.OFF);                         // Only show the devices in directory-listings, we don't want to iterate over other directories (like "structure", "settings"...)
-    factory.setConnectionConfig(config);
     this.owfs = factory.createNewConnection();
   }
 
@@ -119,7 +125,21 @@ public class OwServerConnection {
   }
 
   /**
+   * Return a device alarming scanner. Used to add event listeners for detecting alarming devices.
+   *
+   * @return
+   */
+  public AlarmingDevicesScanner getAlarmingDevicesScanner() {
+    if (owfs == null) {
+      throw new OwServerUnhandledException(String.format("You forgot to run Connect() on OwServerConnection at %s:%s.", this.host, this.port));
+    }
+
+    return factory.getAlarmingScanner();
+  }
+
+  /**
    * List all available devices on 1-wire bus.
+   *
    * @param useCache use Owservers internal cache, much faster but may contain old values.
    * @throws OwServerConnectionException if execution fails
    * @return Returns list of path for all found devices.
@@ -132,9 +152,9 @@ public class OwServerConnection {
     }
 
     try {
-      owDevices = owfs.listDirectory(useCache ? "/" : "/uncached")
+      owDevices = owfs.listDirectoryAll(useCache ? "/" : "/uncached")
           .stream().filter(d -> d != null) // Filter out possible null-values.
-          .map(d -> !d.contains("/uncached") ? "/uncached" + d : d) // Make sure we return the uncached path to the devices regardless of whether we list devices using cache or not.
+          .map(d -> !d.contains("/uncached") ? "/uncached" + d : d) // Make sure we return the uncached path to the devices regardless of whether we list devices using cache or not. This is to be consistent.
           .collect(Collectors.toList());
       attempts = 1;
     } catch (SocketException ex) {
@@ -154,12 +174,53 @@ public class OwServerConnection {
         }
       }
     } catch (OwfsException ex) {
-      throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectory\" on Owserver running at %s:%s, got errorcode", this.host, this.port, ex.getErrorCode()), ex);
+      throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectory\" on Owserver running at %s:%s, got errorcode: %s", this.host, this.port, ex.getErrorCode()), ex);
     } catch (IOException ex) {
       throw new OwServerConnectionException(String.format("Failed to execute action \"listDirectory\" on Owserver running at %s:%s.", this.host, this.port), ex);
     }
 
     return owDevices;
+  }
+
+  /**
+   * Returns true if the specified path exists.
+   *
+   * @param path Path to check.
+   * @return Whether path exists.
+   */
+  public boolean exists(String path) {
+    boolean exists = false;
+
+    if (owfs == null) {
+      throw new OwServerUnhandledException(String.format("You forgot to run Connect() on OwServerConnection at %s:%s.", this.host, this.port));
+    }
+
+    try {
+      exists = owfs.exists(path);
+      attempts = 1;
+    } catch (SocketException ex) {
+      if (attempts > MAX_ATTEMPTS) {
+        throw new OwServerConnectionException(String.format("Failed to execute action \"exists\" on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %s attempts.", this.host, this.port, MAX_ATTEMPTS), ex);
+      } else {
+        attempts++;
+        logger.warn("Failed to execute action \"exists\" on Owserver running at {}:{}, connection seems down. Reconnect attempt# {}.", this.host, this.port, attempts, ex);
+
+        connect();
+        try {
+          // Wait one sec, to not SPAM us to death.
+          Thread.sleep(1000);
+          return exists(path);
+        } catch (InterruptedException ex1) {
+          // Do nothing.
+        }
+      }
+    } catch (OwfsException ex) {
+      throw new OwServerConnectionException(String.format("Failed to execute action \"exists\" on Owserver running at %s:%s, got errorcode: %s", this.host, this.port, ex.getErrorCode()), ex);
+    } catch (IOException ex) {
+      throw new OwServerConnectionException(String.format("Failed to execute action \"exists\" on Owserver running at %s:%s.", this.host, this.port), ex);
+    }
+
+    return exists;
   }
 
   /**
@@ -180,7 +241,7 @@ public class OwServerConnection {
       attempts = 1;
     } catch (SocketException ex) {
       if (attempts > MAX_ATTEMPTS) {
-        throw new OwServerConnectionException(String.format("Failed to execute action \"read\" on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %n attempts.", this.host, this.port, MAX_ATTEMPTS), ex);
+        throw new OwServerConnectionException(String.format("Failed to execute action \"read\" on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %s attempts.", this.host, this.port, MAX_ATTEMPTS), ex);
       } else {
         attempts++;
         logger.warn("Failed to execute action \"read\" on Owserver running at {}:{}, connection seems down. Reconnect attempt# {}.", this.host, this.port, attempts, ex);
@@ -195,7 +256,7 @@ public class OwServerConnection {
         }
       }
     } catch (OwfsException ex) {
-      throw new OwServerConnectionException(String.format("Failed to execute action \"read\" on Owserver running at %s:%s, got errorcode", this.host, this.port, ex.getErrorCode()), ex);
+      throw new OwServerConnectionException(String.format("Failed to execute action \"read\" on Owserver running at %s:%s, got errorcode: %s", this.host, this.port, ex.getErrorCode()), ex);
     } catch (IOException ex) {
       throw new OwServerConnectionException(String.format("Failed to execute action \"read\" on Owserver running at %s:%s.", this.host, this.port), ex);
     }
@@ -220,7 +281,7 @@ public class OwServerConnection {
       attempts = 1;
     } catch (SocketException ex) {
       if (attempts > MAX_ATTEMPTS) {
-        throw new OwServerConnectionException(String.format("Failed to execute write to path '%s' with value '%s' on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %n attempts.", path, value, this.host, this.port, MAX_ATTEMPTS), ex);
+        throw new OwServerConnectionException(String.format("Failed to execute write to path '%s' with value '%s' on Owserver running at %s:%s, connection seems down. Done trying to reconnect after %s attempts.", path, value, this.host, this.port, MAX_ATTEMPTS), ex);
       } else {
         attempts++;
         logger.warn("Failed to execute write to path '%s' with value '%s' on Owserver running at {}:{}, connection seems down. Reconnect attempt# {}.", path, value, this.host, this.port, attempts, ex);
@@ -235,7 +296,7 @@ public class OwServerConnection {
         }
       }
     } catch (OwfsException ex) {
-      throw new OwServerConnectionException(String.format("Failed to execute write to path '%s' with value '%s' on Owserver running at %s:%s, got errorcode", path, value, this.host, this.port, ex.getErrorCode()), ex);
+      throw new OwServerConnectionException(String.format("Failed to execute write to path '%s' with value '%s' on Owserver running at %s:%s, got errorcode: %s", path, value, this.host, this.port, ex.getErrorCode()), ex);
     } catch (IOException ex) {
       throw new OwServerConnectionException(String.format("Failed to execute write to path '%s' with value '%s' on Owserver running at %s:%s.", path, value, this.host, this.port), ex);
     }

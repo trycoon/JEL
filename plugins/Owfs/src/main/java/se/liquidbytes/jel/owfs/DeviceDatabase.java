@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import org.owfs.jowfsclient.device.SwitchAlarmingDeviceListener;
 
 /**
  * Class that contains a "database" of all supported devices an their features.
@@ -78,11 +79,12 @@ public final class DeviceDatabase {
   private static Map<String, JsonObject> createDatabase() {
     Map<String, JsonObject> db = new ConcurrentHashMap<>();
 
+    //--- TEMPERATURE DEVICES ---------------------------------------------------------------------
     JsonObject type = new JsonObject()
         .put("typeId", "DS18S20")
         .put("familyId", "10")
         .put("name", "DS18S20")
-        .put("description", "High-Precision 1-Wire Digital Thermometer")
+        .put("description", "High-Precision 1-Wire Digital Thermometer. It has an operating temperature range of -55°C to +125°C and is accurate to ±0.5°C over the range of -10°C to +85°C.")
         .put("manufacturer", new JsonObject()
             .put("name", "maxim integrated")
             .put("homepage", "https://www.maximintegrated.com")
@@ -100,7 +102,7 @@ public final class DeviceDatabase {
         .put("typeId", "DS18B20")
         .put("familyId", "28")
         .put("name", "DS18B20")
-        .put("description", "High-Precision 1-Wire Digital Thermometer")
+        .put("description", "High-Precision 1-Wire Digital Thermometer. It has an operating temperature range of -55°C to +125°C and is accurate to ±0.5°C over the range of -10°C to +85°C.")
         .put("manufacturer", new JsonObject()
             .put("name", "maxim integrated")
             .put("homepage", "https://www.maximintegrated.com")
@@ -115,23 +117,79 @@ public final class DeviceDatabase {
     db.put(type.getString("typeId"), type);
 
     type = new JsonObject()
+        .put("typeId", "DS1825")
+        .put("familyId", "3B")
+        .put("name", "DS1825")
+        .put("description", "High-Precision 1-Wire Digital Thermometer. It has an operating temperature range of -55°C to +125°C and is accurate to ±0.5°C over the range of -10°C to +85°C.")
+        .put("manufacturer", new JsonObject()
+            .put("name", "maxim integrated")
+            .put("homepage", "https://www.maximintegrated.com")
+            .put("datasheets", "https://datasheets.maximintegrated.com/en/ds/DS1825.pdf")
+        )
+        .put("valueType", "number")
+        .put("maxValue", "125")
+        .put("minValue", "-55")
+        .put("minSampleDelay", "1000")
+        .put("temperatureSensor", true)
+        .put("valueReadPath", "/temperature");
+    db.put(type.getString("typeId"), type);
+
+    type = new JsonObject()
+        .put("typeId", "DS1920")
+        .put("familyId", "10")
+        .put("name", "DS1920")
+        .put("description", "iButton 1-Wire Digital Thermometer.")
+        .put("manufacturer", new JsonObject()
+            .put("name", "maxim integrated")
+            .put("homepage", "https://www.maximintegrated.com")
+            .put("datasheets", "https://datasheets.maximintegrated.com/en/ds/DS1920.pdf")
+        )
+        .put("valueType", "number")
+        .put("maxValue", "100")
+        .put("minValue", "-55")
+        .put("minSampleDelay", "300")
+        .put("temperatureSensor", true)
+        .put("valueReadPath", "/temperature");
+    db.put(type.getString("typeId"), type);
+
+    type = new JsonObject()
+        .put("typeId", "DS1822")
+        .put("familyId", "22")
+        .put("name", "DS1822")
+        .put("description", "1-Wire Digital Thermometer.")
+        .put("manufacturer", new JsonObject()
+            .put("name", "maxim integrated")
+            .put("homepage", "https://www.maximintegrated.com")
+            .put("datasheets", "https://datasheets.maximintegrated.com/en/ds/DS1822.pdf")
+        )
+        .put("valueType", "number")
+        .put("maxValue", "100")
+        .put("minValue", "-55")
+        .put("minSampleDelay", "300")
+        .put("temperatureSensor", true)
+        .put("valueReadPath", "/temperature");
+    db.put(type.getString("typeId"), type);
+
+    //--- SWITCH DEVICES ---------------------------------------------------------------------
+    type = new JsonObject()
         .put("typeId", "DS2408")
         .put("familyId", "29")
         .put("name", "DS2408")
-        .put("description", "1-Wire 8 Channel Addressable Switch")
+        .put("description", "1-Wire 8 channel addressable switch")
         .put("manufacturer", new JsonObject()
             .put("name", "maxim integrated")
             .put("homepage", "https://www.maximintegrated.com")
             .put("datasheets", "https://datasheets.maximintegrated.com/en/ds/DS2408.pdf")
         )
         .put("valueType", "number")
-        .put("minSampleDelay", "1000")
+        .put("minSampleDelay", "100")
         .put("valueReadPath", "/sensed.ALL")
         .put("valueWritePath", "/PIO.ALL")
+        .put("alarmingMask", SwitchAlarmingDeviceListener.ALARMING_MASK_8_SWITCHES)
         .put("initCommands",
             new JsonArray().add(
                 new JsonObject()
-                .put("path", "/strobe")
+                .put("path", "/strobe") //TODO: This should accually only be run when using this device as an output.
                 .put("value", "1")
             )
         )
@@ -194,7 +252,147 @@ public final class DeviceDatabase {
                 .put("valueWritePath", "/PIO.7")
             )
         );
+    db.put(type.getString("typeId"), type);
 
+    type = new JsonObject()
+        .put("typeId", "DS2406")
+        .put("familyId", "12")
+        .put("name", "DS2406")
+        .put("description", "1-Wire dual-channel adressable switch with 1kbit Memory")
+        .put("manufacturer", new JsonObject()
+            .put("name", "maxim integrated")
+            .put("homepage", "https://www.maximintegrated.com")
+            .put("datasheets", "https://datasheets.maximintegrated.com/en/ds/DS2406.pdf")
+        )
+        .put("valueType", "number")
+        .put("minSampleDelay", "100")
+        .put("valueReadPath", "/sensed.ALL")
+        .put("valueWritePath", "/PIO.ALL")
+        .put("alarmingMask", SwitchAlarmingDeviceListener.ALARMING_MASK_2_SWITCHES)
+        .put("childDevices",
+            new JsonArray()
+            .add(
+                new JsonObject()
+                .put("idSuffix", "1")
+                .put("name", "port A")
+                .put("valueReadPath", "/sensed.A")
+                .put("valueWritePath", "/PIO.A")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "2")
+                .put("name", "port B")
+                .put("valueReadPath", "/sensed.B")
+                .put("valueWritePath", "/PIO.B")
+            )
+        );
+    db.put(type.getString("typeId"), type);
+
+    type = new JsonObject()
+        .put("typeId", "DS2413")
+        .put("familyId", "3A")
+        .put("name", "DS2413")
+        .put("description", "1-Wire dual-channel adressable switch")
+        .put("manufacturer", new JsonObject()
+            .put("name", "maxim integrated")
+            .put("homepage", "https://www.maximintegrated.com")
+            .put("datasheets", "https://datasheets.maximintegrated.com/en/ds/DS2413.pdf")
+        )
+        .put("valueType", "number")
+        .put("minSampleDelay", "100")
+        .put("valueReadPath", "/sensed.ALL")
+        .put("valueWritePath", "/PIO.ALL")
+        .put("alarmingMask", SwitchAlarmingDeviceListener.ALARMING_MASK_2_SWITCHES)
+        .put("childDevices",
+            new JsonArray()
+            .add(
+                new JsonObject()
+                .put("idSuffix", "1")
+                .put("name", "port A")
+                .put("valueReadPath", "/sensed.A")
+                .put("valueWritePath", "/PIO.A")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "2")
+                .put("name", "port B")
+                .put("valueReadPath", "/sensed.B")
+                .put("valueWritePath", "/PIO.B")
+            )
+        );
+    db.put(type.getString("typeId"), type);
+
+    //--- VOLTAGE DEVICES ---------------------------------------------------------------------
+    type = new JsonObject()
+        .put("typeId", "DS2450")
+        .put("familyId", "20")
+        .put("name", "DS2450")
+        .put("description", "1-Wire Quad A/D Converter")
+        .put("manufacturer", new JsonObject()
+            .put("name", "maxim integrated")
+            .put("homepage", "https://www.maximintegrated.com")
+            .put("datasheets", "https://datasheets.maximintegrated.com/en/ds/DS2450.pdf")
+        )
+        .put("valueType", "number")
+        .put("minSampleDelay", "100")
+        .put("valueReadPath", "/volt.ALL")
+        .put("childDevices",
+            new JsonArray()
+            .add(
+                new JsonObject()
+                .put("idSuffix", "1")
+                .put("name", "voltage input A")
+                .put("valueReadPath", "/volt.A")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "2")
+                .put("name", "voltage input B")
+                .put("valueReadPath", "/volt.B")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "3")
+                .put("name", "voltage input C")
+                .put("valueReadPath", "/volt.C")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "4")
+                .put("name", "voltage input D")
+                .put("valueReadPath", "/volt.D")
+            )
+        );
+    db.put(type.getString("typeId"), type);
+    //--- COUNTER DEVICES ---------------------------------------------------------------------
+    type = new JsonObject()
+        .put("typeId", "DS2423")
+        .put("familyId", "1D")
+        .put("name", "DS2423")
+        .put("description", "4kbit 1-Wire RAM with Counter")
+        .put("manufacturer", new JsonObject()
+            .put("name", "maxim integrated")
+            .put("homepage", "https://www.maximintegrated.com")
+            .put("datasheets", "https://datasheets.maximintegrated.com/en/ds/DS2423.pdf")
+        )
+        .put("valueType", "number")
+        .put("minSampleDelay", "100")
+        .put("valueReadPath", "/counters.ALL")
+        .put("childDevices",
+            new JsonArray()
+            .add(
+                new JsonObject()
+                .put("idSuffix", "1")
+                .put("name", "counter input A")
+                .put("valueReadPath", "/counters.A")
+            )
+            .add(
+                new JsonObject()
+                .put("idSuffix", "2")
+                .put("name", "counter input B")
+                .put("valueReadPath", "/counters.B")
+            )
+        );
     db.put(type.getString("typeId"), type);
 
     return db;

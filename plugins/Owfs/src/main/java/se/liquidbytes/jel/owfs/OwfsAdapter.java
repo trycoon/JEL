@@ -21,6 +21,7 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.time.Duration;
 import java.time.Instant;
@@ -38,6 +39,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import org.owfs.jowfsclient.OwfsException;
+import org.owfs.jowfsclient.alarm.AlarmingDevicesScanner;
+import org.owfs.jowfsclient.device.SwitchAlarmingDeviceEvent;
+import org.owfs.jowfsclient.device.SwitchAlarmingDeviceListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.system.adapter.AbstractAdapter;
@@ -60,7 +65,7 @@ public class OwfsAdapter extends AbstractAdapter {
   /**
    * Delay between polling 1-wire bus for available devices (milliseconds).
    */
-  private final static int POLL_PRESENCE_DELAY = 30000;
+  private final static int POLL_PRESENCE_DELAY = 60000;
   /**
    * Character that separates a parent id from a child id. (Must be URL compatible)
    */
@@ -102,6 +107,10 @@ public class OwfsAdapter extends AbstractAdapter {
    * Thread pool (with one thread) used for running the main loop that detect and polls devices.
    */
   private ScheduledThreadPoolExecutor mainloopExecutor;
+  /**
+   * Counter to sum up the time we spent waiting on executing queued commmands to Owserver.
+   */
+  private Duration commandsWrittenDuration;
 
   /**
    * Start method for adapter, will be called upon when adapter is expected to start up
@@ -142,8 +151,11 @@ public class OwfsAdapter extends AbstractAdapter {
       handleRequest(message);
     });
 
+    logger.info("Owserver version \"{}\" running at {}:{}.", owserverConnection.read("/system/configuration/version"), this.host, this.port);
+
     // Get initial list af devices.
     scanAvailableDevices();
+
     lastBusScanRun = System.currentTimeMillis();
     mainloopExecutor.scheduleAtFixedRate(mainloopTask(), 1000, 50, TimeUnit.MILLISECONDS);
 
@@ -319,7 +331,6 @@ public class OwfsAdapter extends AbstractAdapter {
                 logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{} with id \"{}\".", path, command.getString("value"), deviceId, this.host, this.port, this.getId());
 
                 owserverConnection.write(path, command.getString("value"));
-                // TODO: After a hardware reset we need to rerun this procedure, is there a way for us to detect a hardware reset (owfs statistics?)?
               }
             }
 
@@ -329,7 +340,7 @@ public class OwfsAdapter extends AbstractAdapter {
                 logger.warn("Device '{}' of type '{}' on Owserver at {}:{} with id \"{}\" is running on parasitic power, this will slow down the 1-wire network and is less reliable than a powered device.", deviceId, deviceType, this.host, this.port, this.getId());
               }
             } catch (OwServerConnectionException ex) {
-              // Ignore. Devices that don't support the power-property will throw an error, so we just ignore this device.
+              // Ignore. Devices that don't support the power-property will throw an error, so we just ignore this.
             }
 
             device = new JsonObject();
@@ -342,6 +353,9 @@ public class OwfsAdapter extends AbstractAdapter {
 
             deviceLookup.put(deviceId, device);
             logger.info("New device found during scan of Owserver at {}:{} with id \"{}\". Device id: {}, type: {}, family: {}.", this.host, this.port, this.getId(), deviceId, deviceType, deviceFamily);
+
+            // For devices that supports it.
+            //setupAlarmHandler(device);
 
             broadcastDevice = new JsonObject()
                 .put("adapterId", this.getId())
@@ -402,6 +416,43 @@ public class OwfsAdapter extends AbstractAdapter {
       logger.debug("Scanning bus for devices took {}ms on Owserver at {}:{} with id \"{}\".", Duration.between(startExecutionTime, Instant.now()).toMillis(), this.host, this.port, this.getId());
     } catch (OwServerConnectionException ex) {
       logger.error("Error while trying to scan Owserver at {}:{} with id \"{}\" for available devices.", this.host, this.port, this.getId(), ex);
+    }
+  }
+
+  /**
+   * Add alarm monitoring for device.
+   *
+   * @param device device to add alarm monitor for. Gets added only if device supports it.
+   */
+  private void setupAlarmHandler(JsonObject device) {
+
+    String alarmingMask = device.getJsonObject("typeInfo").getString("alarmingMask");
+
+    /* We might see these exceptions in the log:
+            "org.owfs.jowfsclient.alarm.AlarmingDevicesReader - Exception occured java.lang.NullPointerException"
+            The problem is that line #11, "if (devicePath.endsWith(SLASH)) {", in file OWFSUtils of the JOwfsClient-library is feed with a null devicePath.
+            Probably Owserver delivers one or more nulls in the collection of alarming devices due to some sort of timeout.
+     */
+    if (alarmingMask != null && !alarmingMask.isEmpty()) {
+      AlarmingDevicesScanner alarmingDevicesScanner = owserverConnection.getAlarmingDevicesScanner();
+
+      SwitchAlarmingDeviceListener alarmingDeviceHandler = new SwitchAlarmingDeviceListener(
+          device.getString("path"),
+          alarmingMask
+      ) {
+        @Override
+        public void handleAlarm(SwitchAlarmingDeviceEvent event) {
+          logger.info("Alarm '" + getDeviceName() + "' : latch:;" + event.latchStatus + "', sensed:'" + event.sensedStatus + "'");
+        }
+      };
+
+      try {
+        alarmingDevicesScanner.addAlarmingDeviceHandler(alarmingDeviceHandler);
+      } catch (OwfsException ex) {
+        logger.error("Failed to setup alarm handler on device \"{}\" on Owserver running at {}:{}, got errorcode: {}.", device.getString("path"), this.host, this.port, ex.getErrorCode(), ex);
+      } catch (IOException ex) {
+        logger.error("Failed to setup alarm handler on device \"{}\" on Owserver running at {}:{}.", device.getString("path"), this.host, this.port, ex);
+      }
     }
   }
 
@@ -536,8 +587,10 @@ public class OwfsAdapter extends AbstractAdapter {
     String value;
     JsonObject reading;
     JsonObject readings;
+    Instant commandsWrittenTime;
 
     for (JsonObject device : devices) {
+
       try {
         id = device.getString("id");
 
@@ -611,6 +664,11 @@ public class OwfsAdapter extends AbstractAdapter {
       } catch (Exception ex) {
         logger.error("Failed to poll device '{}' for value on Owserver at {}:{} with adapter id \"{}\".", id, this.host, this.port, this.getId());
       }
+
+      // Execute possible queued commands between each iteration. This is necessary since a reading from several parasitic devices could take many seconds to complete.
+      commandsWrittenTime = Instant.now();
+      executeQueuedCommands();
+      commandsWrittenDuration.plus(Duration.between(commandsWrittenTime, Instant.now()));
     }
   }
 
@@ -644,17 +702,20 @@ public class OwfsAdapter extends AbstractAdapter {
                 Note that between many of the steps in the main loop we have put in checks for possible queued command that we should execute to get a fast responsetime.
 
                 Even now and then we scan the bus for new/removed devices, a busscan is a slow fragile operation that we don't want to execute too often.
-            */
+       */
       List<JsonObject> allDevices, temperatureDevices, voltageDevices, fastDevices;
-      Instant commandsWrittenTime, simultaneousWrittenTime, fastDevicesReadTime, temperatureDevicesReadTime, voltageDevicesReadTime, busScanTime;
-      Duration commandsWrittenDuration, simultaneousWrittenDuration, fastDevicesReadDuration, temperatureDevicesDuration, voltageDevicesDuration, busScanDuration;
-      Instant startExecutionTime = Instant.now();
+      Instant startExecutionTime, stepTime;
+      Duration simultaneousWrittenDuration, fastDevicesReadDuration, temperatureDevicesDuration, voltageDevicesDuration, busScanDuration;
+
+      startExecutionTime = Instant.now();
+      commandsWrittenDuration = Duration.ZERO;
+      busScanDuration = Duration.ZERO;
 
       try {
         allDevices = getParentDevicesOnly();
         temperatureDevices = allDevices.stream().filter(d -> d.getJsonObject("typeInfo").containsKey("temperatureSensor") && d.getJsonObject("typeInfo").getBoolean("temperatureSensor")).collect(Collectors.toList());
-        voltageDevices = allDevices.stream().filter(d -> d.getJsonObject("typeInfo").getString("typeId").equals("DS2450")).collect(Collectors.toList());
-        fastDevices = allDevices;
+        voltageDevices = allDevices.stream().filter(d -> d.getJsonObject("typeInfo").containsKey("voltageSensor") && d.getJsonObject("typeInfo").getBoolean("voltageSensor")).collect(Collectors.toList());
+        fastDevices = allDevices.stream().filter(d -> !d.getJsonObject("typeInfo").containsKey("alarmingMask")).collect(Collectors.toList()); // We exclude devices that read their values using a alarm handler from this list.
         fastDevices.removeAll(temperatureDevices);
         fastDevices.removeAll(voltageDevices);
       } catch (Exception ex) {
@@ -662,11 +723,7 @@ public class OwfsAdapter extends AbstractAdapter {
         throw ex;
       }
 
-      // Execute all queued commands.
-      executeQueuedCommands();
-      commandsWrittenTime = Instant.now();
-      commandsWrittenDuration = Duration.between(startExecutionTime, commandsWrittenTime);
-
+      stepTime = Instant.now();
       try {
         if (temperatureDevices.size() > 0) {
           // If temperature sensors exists, start a simultaneous conversion on all of them.
@@ -680,44 +737,43 @@ public class OwfsAdapter extends AbstractAdapter {
       } catch (OwServerConnectionException ex) {
         logger.warn("Failed to initiate simultaneous readings of devices on Owserver at {}:{} with adapter id \"{}\". This may slow down adapter communication alot!", this.host, this.port, this.getId(), ex);
       }
-      simultaneousWrittenTime = Instant.now();
-      simultaneousWrittenDuration = Duration.between(commandsWrittenTime, simultaneousWrittenTime);
+      simultaneousWrittenDuration = Duration.between(stepTime, Instant.now());
+
+      // Execute possible queued commands.
+      Instant commandsWrittenTime = Instant.now();
+      executeQueuedCommands();
+      commandsWrittenDuration.plus(Duration.between(commandsWrittenTime, Instant.now()));
 
       // Collect readings on all 1-wire devices that are quite fast
+      stepTime = Instant.now();
       collectDevicesReadings(fastDevices);
-      fastDevicesReadTime = Instant.now();
-      fastDevicesReadDuration = Duration.between(simultaneousWrittenTime, fastDevicesReadTime);
-
-      // Execute possible new queued commands.
-      executeQueuedCommands();
-      commandsWrittenTime = Instant.now();
-      commandsWrittenDuration.plus(Duration.between(fastDevicesReadTime, commandsWrittenTime));
+      fastDevicesReadDuration = Duration.between(stepTime, Instant.now());
 
       // Collect readings on all temperature devices. Hopefully they are all done after the simultaneous conversion.
+      stepTime = Instant.now();
       collectDevicesReadings(temperatureDevices);
-      temperatureDevicesReadTime = Instant.now();
-      temperatureDevicesDuration = Duration.between(commandsWrittenTime, temperatureDevicesReadTime);
-
-      // Execute possible new queued commands.
-      executeQueuedCommands();
-      commandsWrittenTime = Instant.now();
-      commandsWrittenDuration.plus(Duration.between(temperatureDevicesReadTime, commandsWrittenTime));
+      temperatureDevicesDuration = Duration.between(stepTime, Instant.now());
 
       // Collect readings on all voltage devices. Hopefully they are all done after the simultaneous conversion.
+      stepTime = Instant.now();
       collectDevicesReadings(voltageDevices);
-      voltageDevicesReadTime = Instant.now();
-      voltageDevicesDuration = Duration.between(commandsWrittenTime, voltageDevicesReadTime);
+      voltageDevicesDuration = Duration.between(stepTime, Instant.now());
 
       if (System.currentTimeMillis() - lastBusScanRun > POLL_PRESENCE_DELAY) {
         lastBusScanRun = System.currentTimeMillis();
+        stepTime = Instant.now();
         scanAvailableDevices();
+        busScanDuration = Duration.between(stepTime, Instant.now());
+
+        // Execute possible queued commands after a long bus scan.
+        commandsWrittenTime = Instant.now();
+        executeQueuedCommands();
+        commandsWrittenDuration.plus(Duration.between(commandsWrittenTime, Instant.now()));
       }
-      busScanTime = Instant.now();
-      busScanDuration = Duration.between(voltageDevicesReadTime, busScanTime);
 
-      logger.debug("Mainloop execution statistics: command {}ms, simultaneous {}ms, fastdevices {}ms, temperaturedevices {}ms, voltagedevices {}ms, busscan {}ms.", commandsWrittenDuration, simultaneousWrittenDuration, fastDevicesReadDuration, temperatureDevicesDuration, voltageDevicesDuration, busScanDuration);
+      logger.debug("Mainloop execution statistics: total {}ms, command {}ms, simultaneous {}ms, fastdevices {}ms, temperaturedevices {}ms, voltagedevices {}ms, busscan {}ms.", Duration.between(startExecutionTime, Instant.now()), commandsWrittenDuration, simultaneousWrittenDuration, fastDevicesReadDuration, temperatureDevicesDuration, voltageDevicesDuration, busScanDuration);
 
-      // If mainloop are run too fast, like when we have no devices connected, insert a artificial delay to not hog the CPU.
+      // If mainloop has run too fast, like when we have no devices connected, insert a artificial delay to not hog the CPU.
       if (Duration.between(startExecutionTime, Instant.now()).toMillis() < 100) {
         try {
           Thread.sleep(300);
@@ -799,16 +855,27 @@ public class OwfsAdapter extends AbstractAdapter {
 
       return response;
     } else {
-      JsonObject reading = this.deviceReadings.get(deviceId.split(CHILDSEPARATOR)[0]); // Get value from parent.
-      int index = Integer.parseInt(deviceId.split(CHILDSEPARATOR)[1]) - 1;         // Get child idsuffix.
-      String value = reading.getJsonObject("lastReading").getString("value").split(",")[index];  // Get child reading from parent reading.
 
-      JsonObject response = new JsonObject()
-          .put("reading", new JsonObject()
-              .put("id", deviceId)
-              .put("time", reading.getJsonObject("lastReading").getString("time"))
-              .put("value", value)
-          );
+      JsonObject response;
+      JsonObject reading = this.deviceReadings.get(deviceId.split(CHILDSEPARATOR)[0]); // Get value from parent.
+
+      if (reading == null) {
+
+        response = new JsonObject().put("reading", (JsonObject) null);
+
+      } else {
+
+        int index = Integer.parseInt(deviceId.split(CHILDSEPARATOR)[1]) - 1;         // Get child idsuffix.
+
+        String value = reading.getJsonObject("lastReading").getString("value").split(",")[index];  // Get child reading from parent reading.
+
+        response = new JsonObject()
+            .put("reading", new JsonObject()
+                .put("id", deviceId)
+                .put("time", reading.getJsonObject("lastReading").getString("time"))
+                .put("value", value)
+            );
+      }
 
       return response;
     }
