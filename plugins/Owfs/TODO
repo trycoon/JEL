@@ -1,0 +1,8 @@
+
+- Support "lastvoltage" if Owfs version > 3.1p1.
+- Support specifying which pins should be input and output on switch-devices like DS2408.
+- Support adding alarm levels on devices that supports it.
+- Read the switch(e.g. DS2408) current settings on power-on-reset and application startup (/PIO.ALL), all later changes are catched by alarming (I hope).
+- If a output device gets power-on-reset, write old value to setup output to correct state.
+- Support other languages on descriptions.
+- Write basic unittests.

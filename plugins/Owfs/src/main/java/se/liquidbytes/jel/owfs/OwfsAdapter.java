@@ -62,6 +62,7 @@ public class OwfsAdapter extends AbstractAdapter {
    * Logghandler instance
    */
   private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
   /**
    * Delay between polling 1-wire bus for available devices (milliseconds).
    */
@@ -715,6 +716,7 @@ public class OwfsAdapter extends AbstractAdapter {
         allDevices = getParentDevicesOnly();
         temperatureDevices = allDevices.stream().filter(d -> d.getJsonObject("typeInfo").containsKey("temperatureSensor") && d.getJsonObject("typeInfo").getBoolean("temperatureSensor")).collect(Collectors.toList());
         voltageDevices = allDevices.stream().filter(d -> d.getJsonObject("typeInfo").containsKey("voltageSensor") && d.getJsonObject("typeInfo").getBoolean("voltageSensor")).collect(Collectors.toList());
+
         fastDevices = allDevices.stream().filter(d -> !d.getJsonObject("typeInfo").containsKey("alarmingMask")).collect(Collectors.toList()); // We exclude devices that read their values using a alarm handler from this list.
         fastDevices.removeAll(temperatureDevices);
         fastDevices.removeAll(voltageDevices);
@@ -735,7 +737,7 @@ public class OwfsAdapter extends AbstractAdapter {
           owserverConnection.write("/simultaneous/voltage", "1");
         }
       } catch (OwServerConnectionException ex) {
-        logger.warn("Failed to initiate simultaneous readings of devices on Owserver at {}:{} with adapter id \"{}\". This may slow down adapter communication alot!", this.host, this.port, this.getId(), ex);
+        logger.warn("Failed to initiate simultaneous readings of devices on Owserver at {}:{} with adapter id \"{}\". This may slow down adapter readings alot!", this.host, this.port, this.getId(), ex);
       }
       simultaneousWrittenDuration = Duration.between(stepTime, Instant.now());
 
@@ -748,6 +750,17 @@ public class OwfsAdapter extends AbstractAdapter {
       stepTime = Instant.now();
       collectDevicesReadings(fastDevices);
       fastDevicesReadDuration = Duration.between(stepTime, Instant.now());
+
+      // Make sure we wait 800 ms since we started conversion to be sure that sensors have sampled a new temperature.
+      long timeLeftToConvert = 800 - Duration.between(startExecutionTime.plus(simultaneousWrittenDuration), Instant.now()).toMillis();
+      if (timeLeftToConvert > 0) {
+        logger.debug("Waiting additional {} miliseconds for conversion to finish on Owserver at {}:{} with adapter id \"{}\".", timeLeftToConvert, this.host, this.port, this.getId());
+        try {
+          Thread.sleep(timeLeftToConvert);
+        } catch (InterruptedException ex) {
+          // Ignore.
+        }
+      }
 
       // Collect readings on all temperature devices. Hopefully they are all done after the simultaneous conversion.
       stepTime = Instant.now();

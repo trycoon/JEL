@@ -95,7 +95,7 @@ public final class DeviceDatabase {
         .put("minValue", "-55")
         .put("minSampleDelay", "1000")
         .put("temperatureSensor", true)
-        .put("valueReadPath", "/temperature");
+        .put("valueReadPath", "/latesttemp");
     db.put("DS18S20", type);
 
     type = new JsonObject()
@@ -113,7 +113,7 @@ public final class DeviceDatabase {
         .put("minValue", "-55")
         .put("minSampleDelay", "1000")
         .put("temperatureSensor", true)
-        .put("valueReadPath", "/temperature");
+        .put("valueReadPath", "/latesttemp");
     db.put(type.getString("typeId"), type);
 
     type = new JsonObject()
@@ -131,7 +131,7 @@ public final class DeviceDatabase {
         .put("minValue", "-55")
         .put("minSampleDelay", "1000")
         .put("temperatureSensor", true)
-        .put("valueReadPath", "/temperature");
+        .put("valueReadPath", "/latesttemp");
     db.put(type.getString("typeId"), type);
 
     type = new JsonObject()
@@ -149,7 +149,7 @@ public final class DeviceDatabase {
         .put("minValue", "-55")
         .put("minSampleDelay", "300")
         .put("temperatureSensor", true)
-        .put("valueReadPath", "/temperature");
+        .put("valueReadPath", "/latesttemp");
     db.put(type.getString("typeId"), type);
 
     type = new JsonObject()
@@ -167,7 +167,7 @@ public final class DeviceDatabase {
         .put("minValue", "-55")
         .put("minSampleDelay", "300")
         .put("temperatureSensor", true)
-        .put("valueReadPath", "/temperature");
+        .put("valueReadPath", "/latesttemp");
     db.put(type.getString("typeId"), type);
 
     //--- SWITCH DEVICES ---------------------------------------------------------------------
