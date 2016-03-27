@@ -231,7 +231,7 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private void handleRequest(Message message) {
     String action = message.headers().get("action");
-    logger.debug("Executing action \"{}\" on Owserver with id \"{}\" running at {}:{}.", action, this.getId(), this.host, this.port);
+    logger.debug("Executing action \"{}\" on Owserver with adapter id \"{}\" running at {}:{}.", action, this.getId(), this.host, this.port);
 
     try {
       switch (action) {
@@ -251,12 +251,12 @@ public class OwfsAdapter extends AbstractAdapter {
           logger.info("Received a request for a non-implemented action '{}'. Ignoring action.", action);
       }
 
-      logger.debug("Done executing action \"{}\" on Owserver with id \"{}\" running at {}:{}.", action, this.getId(), this.host, this.port);
+      logger.debug("Done executing action \"{}\" on Owserver with adapter id \"{}\" running at {}:{}.", action, this.getId(), this.host, this.port);
     } catch (DeviceMissingException ex) {
-      logger.info("Trying to perform an action on a non existing device ({}) on Owserver with id \"{}\" running at {}:{}.", ex.getDeviceId(), this.getId(), this.host, this.port);
+      logger.info("Trying to perform an action on a non existing device ({}) on Owserver with adapter id \"{}\" running at {}:{}.", ex.getDeviceId(), this.getId(), this.host, this.port);
       message.fail(404, ex.getMessage());
     } catch (OwServerConnectionException ex) {
-      logger.error("Failed to execute action \"{}\" on Owserver with id \"{}\" running at {}:{}.", action, this.getId(), this.host, this.port, ex);
+      logger.error("Failed to execute action \"{}\" on Owserver with adapter id \"{}\" running at {}:{}.", action, this.getId(), this.host, this.port, ex);
       message.fail(500, ex.getMessage());
     }
   }
@@ -307,7 +307,7 @@ public class OwfsAdapter extends AbstractAdapter {
       Instant startExecutionTime = Instant.now();
       logger.debug("Scanning for available devices on Owserver at {}:{} with id \"{}\".", this.host, this.port, this.getId());
       List<String> owDevices = owserverConnection.listDirectory(true);
-      logger.debug("Found {} devices on Owserver at {}:{} with id \"{}\".", owDevices.size(), this.host, this.port, this.getId());
+      logger.debug("Found {} devices on Owserver at {}:{} with adapter id \"{}\".", owDevices.size(), this.host, this.port, this.getId());
 
       for (String owDevice : owDevices) {
         deviceId = owserverConnection.read(owDevice + "/id");
@@ -327,7 +327,7 @@ public class OwfsAdapter extends AbstractAdapter {
               for (Iterator it = typeInfo.getJsonArray("initCommands").iterator(); it.hasNext();) {
                 JsonObject command = (JsonObject) it.next();
                 String path = owDevice + command.getString("path");
-                logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{} with id \"{}\".", path, command.getString("value"), deviceId, this.host, this.port, this.getId());
+                logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{} with adapter id \"{}\".", path, command.getString("value"), deviceId, this.host, this.port, this.getId());
 
                 owserverConnection.write(path, command.getString("value"));
               }
@@ -336,7 +336,7 @@ public class OwfsAdapter extends AbstractAdapter {
             try {
               isPowered = owserverConnection.read(owDevice + "/power");
               if (isPowered != null && isPowered.equals("0")) {
-                logger.warn("Device '{}' of type '{}' on Owserver at {}:{} with id \"{}\" is running on parasitic power, this will slow down the 1-wire network and is less reliable than a powered device.", deviceId, deviceType, this.host, this.port, this.getId());
+                logger.warn("Device '{}' of type '{}' on Owserver at {}:{} with adapter id \"{}\" is running on parasitic power, this will slow down the 1-wire network and is less reliable than a powered device.", deviceId, deviceType, this.host, this.port, this.getId());
               }
             } catch (OwServerConnectionException ex) {
               // Ignore. Devices that don't support the power-property will throw an error, so we just ignore this.
@@ -351,7 +351,7 @@ public class OwfsAdapter extends AbstractAdapter {
             device.put("typeInfo", typeInfo);
 
             deviceLookup.put(deviceId, device);
-            logger.info("New device found during scan of Owserver at {}:{} with id \"{}\". Device id: {}, type: {}, family: {}.", this.host, this.port, this.getId(), deviceId, deviceType, deviceFamily);
+            logger.info("New device found during scan of Owserver at {}:{} with adapter id \"{}\". Device hwid: {}, type: {}, family: {}.", this.host, this.port, this.getId(), deviceId, deviceType, deviceFamily);
 
             // For devices that supports it.
             //setupAlarmHandler(device);
@@ -376,7 +376,7 @@ public class OwfsAdapter extends AbstractAdapter {
                 childDevice.put("name", String.format("%s-%s", typeInfo.getString("name"), childType.getString("name")));
 
                 deviceLookup.put(childId, childDevice);
-                logger.info("New childdevice for device {} found during scan of Owserver at {}:{} with id \"{}\". Device id: {}, type: {}, family: {}.", deviceId, this.host, this.port, this.getId(), childId, deviceType, deviceFamily);
+                logger.info("New childdevice for device {} found during scan of Owserver at {}:{} with adapter id \"{}\". Device hwid: {}, type: {}, family: {}.", deviceId, this.host, this.port, this.getId(), childId, deviceType, deviceFamily);
 
                 broadcastDevice = new JsonObject()
                     .put("adapterId", this.getId())
@@ -389,7 +389,7 @@ public class OwfsAdapter extends AbstractAdapter {
               }
             }
           } else {
-            logger.info("Found unsupported devicetype for device with id '{}' on Owserver at {}:{} with id \"{}\". Device will be ignored! Please notify developers and provide: type={}, family={}.", deviceId, this.host, this.port, this.getId(), deviceType, deviceFamily);
+            logger.info("Found unsupported devicetype for device with hwid '{}' on Owserver at {}:{} with adapter id \"{}\". Device will be ignored! Please notify developers and provide: type={}, family={}.", deviceId, this.host, this.port, this.getId(), deviceType, deviceFamily);
           }
         }
       }
