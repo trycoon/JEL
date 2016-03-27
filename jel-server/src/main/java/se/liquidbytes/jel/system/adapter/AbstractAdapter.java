@@ -16,7 +16,6 @@
 package se.liquidbytes.jel.system.adapter;
 
 import io.vertx.core.AbstractVerticle;
-import org.slf4j.Logger;
 import se.liquidbytes.jel.system.plugin.Plugin;
 
 /**
@@ -27,11 +26,13 @@ import se.liquidbytes.jel.system.plugin.Plugin;
 public abstract class AbstractAdapter extends AbstractVerticle implements Plugin {
 
   /**
-   * Logghandler instance
+   * Id for adapter.
    */
-  private Logger logger;
-
   private String id;
+
+  public AbstractAdapter() {
+
+  }
 
   /**
    * Get id for adapter.

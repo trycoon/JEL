@@ -40,8 +40,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.JelException;
 import se.liquidbytes.jel.Settings;
+import se.liquidbytes.jel.system.InternalEvents;
 import se.liquidbytes.jel.system.JelService;
-import static se.liquidbytes.jel.system.JelService.EVENTBUS;
 import se.liquidbytes.jel.system.plugin.PluginDesc;
 
 /**
@@ -60,21 +60,6 @@ public final class AdapterManager {
    * Logghandler instance
    */
   private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
-  /**
-   * Namespace for communicating adapter events over the eventbus.
-   */
-  public final static String EVENTBUS_ADAPTERS = EVENTBUS + ".adapters";
-
-  /**
-   * Events
-   */
-  public final static String EVENT_ADAPTERTYPE_ADDED = "ADAPTERTYPE_ADDED";
-  public final static String EVENT_ADAPTERTYPE_REMOVED = "ADAPTERTYPE_REMOVED";
-  public final static String EVENT_ADAPTER_ADDED = "ADAPTER_ADDED";
-  public final static String EVENT_ADAPTER_REMOVED = "ADAPTER_REMOVED";
-  public final static String EVENT_ADAPTER_STARTED = "ADAPTER_STARTED";
-  public final static String EVENT_ADAPTER_STOPPED = "ADAPTER_STOPPED";
 
   /**
    * Collection of all adapters.
@@ -210,7 +195,7 @@ public final class AdapterManager {
         logger.info("Adding new adaptertype '{}'.", adapterType.getName());
         adapterTypes.put(adapterType.getName(), adapterType);
 
-        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapterType.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTERTYPE_ADDED));
+        JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, adapterType.toApi(), new DeliveryOptions().addHeader("action", InternalEvents.EVENT_ADAPTERTYPE_ADDED));
 
         startAdapters(adapterType);
       }
@@ -231,7 +216,7 @@ public final class AdapterManager {
         logger.info("Removing existing adaptertype '{}'.", type.getName());
         adapterTypes.remove(type.getName());
 
-        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapterType.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTERTYPE_REMOVED));
+        JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, adapterType.toApi(), new DeliveryOptions().addHeader("action", InternalEvents.EVENT_ADAPTERTYPE_REMOVED));
 
         stopAdapters(adapterType);
       }
@@ -305,7 +290,7 @@ public final class AdapterManager {
         objectMapper.writer().withDefaultPrettyPrinter().writeValue(adapterFilePath.toFile(), adaptersSettings);
         startAdapter(config);
 
-        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, config.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_ADDED));
+        JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, config.toApi(), new DeliveryOptions().addHeader("action", InternalEvents.EVENT_ADAPTER_ADDED));
       } catch (IOException ex) {
         existingAdapters.remove(config);
         throw new JelException(String.format("Failed to add adapterconfiguration to %s.", adapterFilePath), ex);
@@ -337,7 +322,7 @@ public final class AdapterManager {
         objectMapper.writer().withDefaultPrettyPrinter().writeValue(adapterFilePath.toFile(), adaptersSettings);
         stopAdapter(config);
 
-        JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, config.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_REMOVED));
+        JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, config.toApi(), new DeliveryOptions().addHeader("action", InternalEvents.EVENT_ADAPTER_REMOVED));
       } catch (IOException ex) {
         existingAdapters.add(config);
         throw new JelException(String.format("Failed to removed adapterconfiguration from %s.", adapterFilePath), ex);
@@ -360,7 +345,7 @@ public final class AdapterManager {
             if (res.succeeded()) {
               adapterList.remove(adapter);
               logger.info("Stopped verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort());
-              JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STOPPED));
+              JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, adapter.toApi(), new DeliveryOptions().addHeader("action", InternalEvents.EVENT_ADAPTER_STOPPED));
             } else {
               logger.error("Failed to stop verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort(), res.cause());
             }
@@ -384,7 +369,7 @@ public final class AdapterManager {
               if (res.succeeded()) {
                 adapterInstances.remove(adapter);
                 logger.info("Stopped verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort());
-                JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STOPPED));
+                JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, adapter.toApi(), new DeliveryOptions().addHeader("action", InternalEvents.EVENT_ADAPTER_STOPPED));
               } else {
                 logger.error("Failed to stop verticle for adapter '{}' using addess '{}' and port '{}'.", adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort(), res.cause());
               }
@@ -458,7 +443,7 @@ public final class AdapterManager {
 
                     adapterList.add(adapter);
 
-                    JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STARTED));
+                    JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, adapter.toApi(), new DeliveryOptions().addHeader("action", InternalEvents.EVENT_ADAPTER_STARTED));
                     onResult.accept(true);
                   } else {
                     logger.error("Failed to deploy verticle for adapter '{}' using address '{}' and port '{}'.",
@@ -533,7 +518,7 @@ public final class AdapterManager {
 
               adapterList.add(adapter);
 
-              JelService.vertx().eventBus().publish(EVENTBUS_ADAPTERS, adapter.toApi(), new DeliveryOptions().addHeader("action", AdapterManager.EVENT_ADAPTER_STARTED));
+              JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, adapter.toApi(), new DeliveryOptions().addHeader("action", InternalEvents.EVENT_ADAPTER_STARTED));
             } else {
               logger.error("Failed to deploy verticle for adapter '{}' using address '{}' and port '{}'.",
                   deployedConfig.getType(), deployedConfig.getAddress(), deployedConfig.getPort(), res.cause());

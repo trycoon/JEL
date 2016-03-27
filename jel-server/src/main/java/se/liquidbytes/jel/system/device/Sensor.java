@@ -26,7 +26,7 @@ import io.vertx.core.json.JsonObject;
  */
 public class Sensor extends Device {
 
-  private static final ObjectWriter objectWriter = new ObjectMapper().writer().withDefaultPrettyPrinter();
+  private static final ObjectWriter OBJECT_WRITER = new ObjectMapper().writer().withDefaultPrettyPrinter();
   private DeviceValue maxValue;
   private DeviceValue minValue;
   private long sampleDelay;
@@ -97,7 +97,7 @@ public class Sensor extends Device {
    */
   @Override
   public JsonObject toApi() throws JsonProcessingException {
-    String json = objectWriter.writeValueAsString(this);
+    String json = OBJECT_WRITER.writeValueAsString(this);
     JsonObject result = new JsonObject(json);
 
     return result;

@@ -16,7 +16,6 @@
 package se.liquidbytes.jel.system.adapter;
 
 import io.vertx.core.json.JsonObject;
-import java.util.Objects;
 import se.liquidbytes.jel.system.plugin.PluginDesc;
 
 /**
@@ -127,6 +126,12 @@ public class DeployedAdapter {
     return false;
   }
 
+  /**
+   * Compare two adapterconfigurations to see if they have the same settings, thus is equal.
+   *
+   * @param other Other adapterconfiguration
+   * @return if equal
+   */
   public boolean equals(AdapterConfiguration other) {
     // I guess I could have put this code in the above equals-method, but that would have made it too magical.
     if (other == null) {
@@ -138,13 +143,13 @@ public class DeployedAdapter {
         && other.getPort() == config.getPort();
   }
 
+  /**
+   * Get hashvalue representing this adapterconfiguration
+   *
+   * @return hashvalue
+   */
   @Override
   public int hashCode() {
-    int hash = 5;
-    hash = 41 * hash + Objects.hashCode(this.config.getType());
-    hash = 41 * hash + Objects.hashCode(this.config.getAddress());
-    hash = 41 * hash + Objects.hashCode(this.config.getPort());
-
-    return hash;
+    return Math.abs(java.util.Objects.hash(this.config.getType(), this.config.getAddress(), this.config.getPort()));
   }
 }

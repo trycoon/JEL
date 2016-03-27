@@ -175,15 +175,14 @@ public class DeviceApi {
 
   public void getDeviceValue(RoutingContext context) {
     HttpServerRequest request = context.request();
-    String adapterId = request.getParam("adapterId");
     String deviceId = request.getParam("deviceId");
 
-    if (adapterId == null || deviceId == null) {
+    if (deviceId == null) {
       context.fail(400);
       return;
     }
 
-    service.retrieveDeviceValue(adapterId, deviceId, (r) -> {
+    service.retrieveDeviceValue(deviceId, (r) -> {
       if (r.succeeded()) {
         context.response().end(r.result().encodePrettily());
       } else {
@@ -194,15 +193,16 @@ public class DeviceApi {
 
   public void setDeviceValue(RoutingContext context) {
     HttpServerRequest request = context.request();
-    String adapterId = request.getParam("adapterId");
     String deviceId = request.getParam("deviceId");
+    JsonObject body = context.getBodyAsJson();
+    String value = body.getString("value");
 
-    if (adapterId == null || deviceId == null) {
+    if (deviceId == null) {
       context.fail(400);
       return;
     }
 
-    service.updateDeviceValue(adapterId, deviceId, context.getBodyAsJson(), (r) -> {
+    service.updateDeviceValue(deviceId, value, (r) -> {
       if (r.succeeded()) {
         context.response().end();
       } else {

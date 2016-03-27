@@ -104,8 +104,8 @@
     </plugins>
   </reporting>
   <properties>
-    <vertx.version>3.2.0</vertx.version>
-    <orientdb.version>2.1.8</orientdb.version>
+    <vertx.version>3.2.1</vertx.version>
+    <orientdb.version>2.1.12</orientdb.version>
     <handlebars.version>3.2.0</handlebars.version>
     <hazelcast.version>3.5</hazelcast.version>
     <log4j.version>2.3</log4j.version>

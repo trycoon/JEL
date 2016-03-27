@@ -16,7 +16,6 @@
 package se.liquidbytes.jel.system.adapter;
 
 import io.vertx.core.json.JsonObject;
-import java.util.Objects;
 
 /**
  * Class holds the configuration for a physical adapter (these are stored in adapters.json).
@@ -134,6 +133,12 @@ public final class AdapterConfiguration {
     return obj;
   }
 
+  /**
+   * Compare two adapters to see if they have the same settings, thus is equal.
+   *
+   * @param other Other adapter
+   * @return if equal
+   */
   @Override
   public boolean equals(Object other) {
     if (other == null) {
@@ -153,12 +158,13 @@ public final class AdapterConfiguration {
     return false;
   }
 
+  /**
+   * Get hashvalue representing this adapter
+   *
+   * @return hashvalue
+   */
   @Override
   public int hashCode() {
-    int hash = 7;
-    hash = 73 * hash + Objects.hashCode(this.type);
-    hash = 73 * hash + Objects.hashCode(this.address);
-    hash = 73 * hash + this.port;
-    return hash;
+    return Math.abs(java.util.Objects.hash(this.type, this.address, this.port));
   }
 }

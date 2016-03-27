@@ -20,6 +20,7 @@ import io.vertx.core.json.JsonObject;
 import se.liquidbytes.jel.system.Identifiable;
 
 /**
+ * Abstract baseclass for devices, contains general stuff most inheritage devices would want to implement.
  *
  * @author Henrik Östman
  */
@@ -28,8 +29,8 @@ public abstract class Device implements Identifiable {
   private String id;
   private String name;
   private String description;
-  private String[] gps; //"57.6378669 18.284855"
-  private String state;
+  private String[] gps; // e.g. "[57.6378669, 18.284855]" , latitude-longitude
+  private boolean isPresent;
   private DeviceHardware hardware;
   private DeviceValue currentValue;
   private DeviceValue previousValue;
@@ -39,6 +40,8 @@ public abstract class Device implements Identifiable {
   private DevicePresentation largePresentation;
 
   /**
+   * Our internal Id and NOT the device own hardware id.
+   *
    * @return the id
    */
   @Override
@@ -47,6 +50,8 @@ public abstract class Device implements Identifiable {
   }
 
   /**
+   * Our internal Id and NOT the device own hardware id.
+   *
    * @param id the id to set
    */
   @Override
@@ -55,6 +60,8 @@ public abstract class Device implements Identifiable {
   }
 
   /**
+   * The name we have given the device, e.g. "Outside temperature", or "Garage switch".
+   *
    * @return the name
    */
   public String getName() {
@@ -62,13 +69,17 @@ public abstract class Device implements Identifiable {
   }
 
   /**
+   * The name we have given the device, e.g. "Outside temperature", or "Garage switch".
+   *
    * @param name the name to set
    */
-  public void setName(String name) {
+  void setName(String name) {
     this.name = name;
   }
 
   /**
+   * An optional longer description of the device than the name.
+   *
    * @return the description
    */
   public String getDescription() {
@@ -76,13 +87,17 @@ public abstract class Device implements Identifiable {
   }
 
   /**
+   * An optional longer description of the device than the name.
+   *
    * @param description the description to set
    */
-  public void setDescription(String description) {
+  void setDescription(String description) {
     this.description = description;
   }
 
   /**
+   * Optional GPS coordinates of the placement of the device.
+   *
    * @return the gps
    */
   public String[] getGps() {
@@ -90,27 +105,35 @@ public abstract class Device implements Identifiable {
   }
 
   /**
+   * Optional GPS coordinates of the placement of the device.
+   *
    * @param gps the gps to set
    */
-  public void setGps(String[] gps) {
+  void setGps(String[] gps) {
     this.gps = gps;
   }
 
   /**
-   * @return the state
+   * If the device currently is present/connected.
+   *
+   * @return if present
    */
-  public String getState() {
-    return state;
+  public boolean isPresent() {
+    return isPresent;
   }
 
   /**
-   * @param state the state to set
+   * If the device currently is present/connected.
+   *
+   * @param isPresent if present
    */
-  public void setState(String state) {
-    this.state = state;
+  void isPresent(boolean isPresent) {
+    this.isPresent = isPresent;
   }
 
   /**
+   * Get hardware configuration.
+   *
    * @return the hardware
    */
   public DeviceHardware getHardware() {
@@ -118,13 +141,17 @@ public abstract class Device implements Identifiable {
   }
 
   /**
+   * Set hardware configuration.
+   *
    * @param hardware the hardware to set
    */
-  public void setHardware(DeviceHardware hardware) {
+  void setHardware(DeviceHardware hardware) {
     this.hardware = hardware;
   }
 
   /**
+   * Get last device reading.
+   *
    * @return the currentValue
    */
   public DeviceValue getCurrentValue() {
@@ -132,77 +159,99 @@ public abstract class Device implements Identifiable {
   }
 
   /**
+   * Set last device reading.
+   *
    * @param currentValue the currentValue to set
    */
-  public void setCurrentValue(DeviceValue currentValue) {
+  void setCurrentValue(DeviceValue currentValue) {
     this.currentValue = currentValue;
   }
 
   /**
-   * @return the previousValue
+   * Get previous device reading (the one before currentValue).
+   *
+   * @return the previous value
    */
   public DeviceValue getPreviousValue() {
     return previousValue;
   }
 
   /**
-   * @param previousValue the previousValue to set
+   * Set previous device reading (the one before currentValue).
+   *
+   * @param previousValue the previous value to set
    */
-  public void setPreviousValue(DeviceValue previousValue) {
+  void setPreviousValue(DeviceValue previousValue) {
     this.previousValue = previousValue;
   }
 
   /**
-   * @return the valueType
+   * Get the datatype for the device reading, e.g. should it be parsed as a boolean, an number, a string, and so on.
+   *
+   * @return the value type
    */
   public String getValueType() {
     return valueType;
   }
 
   /**
-   * @param valueType the valueType to set
+   * Get the datatype for the device reading, e.g. should it be parsed as a boolean, an number, a string, and so on.
+   *
+   * @param valueType the value type to set
    */
   public void setValueType(String valueType) {
     this.valueType = valueType;
   }
 
   /**
-   * @return the smallPresentation
+   * Get the prefered visual representation of the device when shown on a small display.
+   *
+   * @return the small presentation
    */
   public DevicePresentation getSmallPresentation() {
     return smallPresentation;
   }
 
   /**
-   * @param smallPresentation the smallPresentation to set
+   * Set the prefered visual representation of the device when shown on a small display.
+   *
+   * @param smallPresentation the small presentation to set
    */
   public void setSmallPresentation(DevicePresentation smallPresentation) {
     this.smallPresentation = smallPresentation;
   }
 
   /**
-   * @return the mediumPresentation
+   * Get the prefered visual representation of the device when shown on a medium size display.
+   *
+   * @return the medium presentation
    */
   public DevicePresentation getMediumPresentation() {
     return mediumPresentation;
   }
 
   /**
-   * @param mediumPresentation the mediumPresentation to set
+   * Set the prefered visual representation of the device when shown on a medium size display.
+   *
+   * @param mediumPresentation the medium presentation to set
    */
   public void setMediumPresentation(DevicePresentation mediumPresentation) {
     this.mediumPresentation = mediumPresentation;
   }
 
   /**
-   * @return the largePresentation
+   * Get the prefered visual representation of the device when shown on a large size display.
+   *
+   * @return the large presentation
    */
   public DevicePresentation getLargePresentation() {
     return largePresentation;
   }
 
   /**
-   * @param largePresentation the largePresentation to set
+   * Set the prefered visual representation of the device when shown on a large size display.
+   *
+   * @param largePresentation the large presentation to set
    */
   public void setLargePresentation(DevicePresentation largePresentation) {
     this.largePresentation = largePresentation;

@@ -50,10 +50,7 @@ public class JelServiceImpl implements JelServiceProxy {
   public void start() {
     JelService.adapterManager().start();
     JelService.pluginManager().start();
-    // Wait a while to let stuff get into place before talking to the adapters.
-    JelService.vertx().setTimer(500, h -> {
-      JelService.deviceManager().start();
-    });
+    JelService.deviceManager().start();
   }
 
   /**
@@ -365,9 +362,9 @@ public class JelServiceImpl implements JelServiceProxy {
   }
 
   @Override
-  public void retrieveDeviceValue(String adapterId, String deviceId, Handler<AsyncResult<JsonObject>> resultHandler) {
+  public void retrieveDeviceValue(String deviceId, Handler<AsyncResult<JsonObject>> resultHandler) {
     try {
-      JelService.deviceManager().retrieveDeviceValue(adapterId, deviceId, (onResult) -> {
+      JelService.deviceManager().retrieveDeviceValue(deviceId, (onResult) -> {
         if (onResult.succeeded()) {
           resultHandler.handle(Future.succeededFuture(onResult.result()));
         } else {
@@ -380,9 +377,9 @@ public class JelServiceImpl implements JelServiceProxy {
   }
 
   @Override
-  public void updateDeviceValue(String adapterId, String deviceId, JsonObject value, Handler<AsyncResult<Void>> resultHandler) {
+  public void updateDeviceValue(String deviceId, String value, Handler<AsyncResult<Void>> resultHandler) {
     try {
-      JelService.deviceManager().updateDeviceValue(adapterId, deviceId, value, (onResult) -> {
+      JelService.deviceManager().updateDeviceValue(deviceId, value, (onResult) -> {
         if (onResult.succeeded()) {
           resultHandler.handle(Future.succeededFuture(onResult.result()));
         } else {

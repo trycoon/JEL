@@ -130,9 +130,9 @@ public interface JelServiceProxy {
 
   void listSiteDevices(String siteId, Handler<AsyncResult<JsonArray>> resultHandler);
 
-  void retrieveDeviceValue(String adapterId, String deviceId, Handler<AsyncResult<JsonObject>> resultHandler);
+  void retrieveDeviceValue(String deviceId, Handler<AsyncResult<JsonObject>> resultHandler);
 
-  void updateDeviceValue(String adapterId, String deviceId, JsonObject value, Handler<AsyncResult<Void>> resultHandler);
+  void updateDeviceValue(String deviceId, String value, Handler<AsyncResult<Void>> resultHandler);
   /*
    router.post ("/sites/:siteId/devices").handler(deviceApi::addToSite);
    router.get ("/sites/:siteId/devices").handler(deviceApi::listOnSite);

@@ -33,6 +33,7 @@ import io.vertx.ext.web.handler.LoggerFormat;
 import io.vertx.ext.web.handler.LoggerHandler;
 import io.vertx.ext.web.handler.SessionHandler;
 import io.vertx.ext.web.handler.StaticHandler;
+import io.vertx.ext.web.handler.sockjs.BridgeOptions;
 import io.vertx.ext.web.handler.sockjs.SockJSHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.sstore.SessionStore;
@@ -58,6 +59,10 @@ public class WebserverVerticle extends AbstractVerticle {
    * REST-API mount point
    */
   public final static String REST_MOUNTPOINT = "/api";
+  /**
+   * Eventbus mount point, used for pushing information/events to connected clients.
+   */
+  public final static String EVENTBUS_MOUNTPOINT = "/eventbus/*";
   /**
    * Logghandler instance
    */
@@ -172,33 +177,37 @@ public class WebserverVerticle extends AbstractVerticle {
    */
   private Router createRouter() {
     Router router = Router.router(vertx);
-    router.route().failureHandler(ErrorHandler.create(Settings.isDebug())); // Show error details only when running in debug/development-mode
 
     // Log all request.
     router.route().handler(LoggerHandler.create(LoggerFormat.SHORT));
 
+    // Serve favicons, https://en.wikipedia.org/wiki/Favicon
     if (Settings.get("skipweb").equals("false")) {
-      // Serve favicons, https://en.wikipedia.org/wiki/Favicon
       router.route().handler(FaviconHandler.create());
-      // Static resources
-      staticHandler(router);
     }
 
     // Session / cookies for users
     router.route().handler(CookieHandler.create());
     SessionStore sessionStore = LocalSessionStore.create(vertx);
-    SessionHandler sessionHandler = SessionHandler.create(sessionStore).setSessionCookieName("jel.session"); //TODO: Add HttpOnly to SessionHandler
+    SessionHandler sessionHandler = SessionHandler.create(sessionStore).setSessionCookieName("jel.session").setCookieHttpOnlyFlag(true);
     router.route().handler(sessionHandler);
 
-    // Dynamic pages
-    /*if (Settings.get("skipweb").equals("false")) {      dynamicPages(router);
-     }*/
     // API
     router.mountSubRouter(REST_MOUNTPOINT, apiRouter());
 
-    // SockJS / EventBus
-    //router.route("/eventbus/*").handler(eventBusHandler());
-    // No matcher - MUST be last in routers chain
+    //  EventBus ( SockJS)
+    router.route(EVENTBUS_MOUNTPOINT).handler(eventBusHandler());
+
+    router.route().failureHandler(ErrorHandler.create(Settings.isDebug())); // Show error details only when running in debug/development-mode
+
+    if (Settings.get("skipweb").equals("false")) {
+      // Static resources, must be placed after API-router to not catch API calls also.
+      staticHandler(router);
+      // TODO: implement this project structure on the clientside: http://vertx.io/blog/vert-x3-real-time-web-apps/
+      // TODO: Use this as a template on the clientside: https://github.com/vert-x3/vertx-examples/blob/master/metrics-examples/src/main/java/io/vertx/example/metrics/dashboard/webroot/vertx-eventbus.js
+    }
+
+    // No matcher - MUST be last in router chain
     router.route().handler(con -> {
       con.fail(404);
     });
@@ -213,9 +222,10 @@ public class WebserverVerticle extends AbstractVerticle {
    * @return Router with added handler.
    */
   private Router staticHandler(Router router) {
-    StaticHandler staticHandler = StaticHandler.create().setWebRoot("web");
+    StaticHandler staticHandler = StaticHandler.create().setWebRoot("webroot");
     staticHandler.setCachingEnabled(!Settings.isDebug()).setMaxAgeSeconds(3600 * 24 * 180); // 180 days caching, disabled when running in debug/development-mode.
-    router.route("/assets/*").handler(staticHandler);
+
+    router.route("/*").handler(staticHandler);
 
     return router;
   }
@@ -234,7 +244,6 @@ public class WebserverVerticle extends AbstractVerticle {
 
     //router.route().consumes("application/xml");
     //router.route().produces("application/xml");
-
     router.route().handler(BodyHandler.create().setBodyLimit(1024 * 5000)); // Max 5 MiB upload limit
     router.route().handler((RoutingContext con) -> {
       con.response().putHeader("content-type", "application/json");
@@ -323,12 +332,25 @@ public class WebserverVerticle extends AbstractVerticle {
   /**
    * Set up Eventbus and specify which namespaces are allowed for inbound and outbound communication.
    *
-   * @return A SocketJSHandler-instance
+   * @return SockJSHandler instance.
    */
   private SockJSHandler eventBusHandler() {
-    SockJSHandler handler = SockJSHandler.create(vertx);
+    BridgeOptions options = new BridgeOptions();
+    //BridgeOptions options = new BridgeOptions().addOutboundPermitted(new PermittedOptions().setAddress(PublicEvents.EVENTBUS_PUBLIC)); //TODO: figur out appropriate permission.
+    return SockJSHandler.create(vertx).bridge(options, event -> {
+      switch (event.type()) {
+        case SOCKET_CREATED:
+          logger.debug("Socket created for remote client: " + event.socket().remoteAddress().toString());
+          break;
+        case SOCKET_CLOSED:
+          logger.debug("Socket closed for remote client: " + event.socket().remoteAddress().toString());
+          break;
+        case PUBLISH:
+          logger.debug("Eventbus message received from client from remote client: " + event.socket().remoteAddress().toString());
+          break;
+      }
 
-    // TODO: Add new eventbus code for vertx-3.2
-    return handler;
+      event.complete(true);
+    });
   }
 }

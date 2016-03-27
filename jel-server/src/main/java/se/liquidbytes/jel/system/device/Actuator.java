@@ -26,7 +26,7 @@ import io.vertx.core.json.JsonObject;
  */
 public class Actuator extends Device {
 
-  private static final ObjectWriter objectWriter = new ObjectMapper().writer().withDefaultPrettyPrinter();
+  private static final ObjectWriter OBJECT_WRITER = new ObjectMapper().writer().withDefaultPrettyPrinter();
 
   /**
    * Information about this object in a public API-friendly way.
@@ -36,7 +36,7 @@ public class Actuator extends Device {
    */
   @Override
   public JsonObject toApi() throws JsonProcessingException {
-    String json = objectWriter.writeValueAsString(this);
+    String json = OBJECT_WRITER.writeValueAsString(this);
     JsonObject result = new JsonObject(json);
 
     return result;
