@@ -23,7 +23,8 @@ package se.liquidbytes.jel.system;
 public final class PublicEvents {
 
   /**
-   * Namespace for communicating events over the public eventbus.
+   * Namespace of public eventbus, used by connected clients to communicate with JEL and subscribe on updates. It's similar to the internal eventbus but should
+   * not expose sensitive information.
    */
   public static final String EVENTBUS_PUBLIC = JelService.EVENTBUS + ".public";
 

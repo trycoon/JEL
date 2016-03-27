@@ -34,6 +34,7 @@ import io.vertx.ext.web.handler.LoggerHandler;
 import io.vertx.ext.web.handler.SessionHandler;
 import io.vertx.ext.web.handler.StaticHandler;
 import io.vertx.ext.web.handler.sockjs.BridgeOptions;
+import io.vertx.ext.web.handler.sockjs.PermittedOptions;
 import io.vertx.ext.web.handler.sockjs.SockJSHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.sstore.SessionStore;
@@ -43,6 +44,7 @@ import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.Settings;
 import se.liquidbytes.jel.SystemInfo;
 import static se.liquidbytes.jel.system.JelService.API_ENDPOINT;
+import se.liquidbytes.jel.system.PublicEvents;
 import se.liquidbytes.jel.web.api.AdapterApi;
 import se.liquidbytes.jel.web.api.DeviceApi;
 import se.liquidbytes.jel.web.api.PluginApi;
@@ -335,7 +337,7 @@ public class WebserverVerticle extends AbstractVerticle {
    * @return SockJSHandler instance.
    */
   private SockJSHandler eventBusHandler() {
-    BridgeOptions options = new BridgeOptions();
+    BridgeOptions options = new BridgeOptions().addOutboundPermitted(new PermittedOptions().setAddress(PublicEvents.EVENTBUS_PUBLIC));
     //BridgeOptions options = new BridgeOptions().addOutboundPermitted(new PermittedOptions().setAddress(PublicEvents.EVENTBUS_PUBLIC)); //TODO: figur out appropriate permission.
     return SockJSHandler.create(vertx).bridge(options, event -> {
       switch (event.type()) {

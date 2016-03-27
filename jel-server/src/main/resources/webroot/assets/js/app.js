@@ -1,7 +1,8 @@
 /* global Gauge */
 
 (function () {
-
+  'use strict';
+  
   function createGauge(name, elementId) {
     return new Gauge({
       renderTo: elementId,
@@ -16,8 +17,8 @@
       minorTicks: 10,
       strokeTicks: false,
       highlights: [
-        {from: 0, to: 16, color: 'rgba(0,   0, 255, .3)'},
-        {from: 23, to: 55, color: 'rgba(255, 0, 0, .3)'}
+        {from: 0, to: 18, color: 'rgba(0,   0, 255, .3)'},
+        {from: 25, to: 55, color: 'rgba(255, 0, 0, .3)'}
       ],
       colors: {
         plate: '#222',
@@ -69,74 +70,67 @@
   }
 
   var gauge = createGauge('Kök', '1446390193');
-  gauge.onready = function () {
-    setInterval(function () {
-      Gauge.Collection.get('1446390193').setValue(Math.random() * 50);
-    }, 1500);
-  };
   gauge.draw();
 
   gauge = createGauge('Vardagsrum', '157310299');
-  gauge.onready = function () {
-    setInterval(function () {
-      Gauge.Collection.get('157310299').setValue(Math.random() * 50);
-    }, 1500);
-  };
   gauge.draw();
 
   gauge = createGauge('Hall/pannrum', '666657313');
-  gauge.onready = function () {
-    setInterval(function () {
-      Gauge.Collection.get('666657313').setValue(Math.random() * 50);
-    }, 1500);
-  };
   gauge.draw();
 
   gauge = createGauge('Arbetsrum', '302851082');
-  gauge.onready = function () {
-    setInterval(function () {
-      Gauge.Collection.get('302851082').setValue(Math.random() * 50);
-    }, 1500);
-  };
   gauge.draw();
 
   gauge = createGauge('Entré', '1544184166');
-  gauge.onready = function () {
-    setInterval(function () {
-      Gauge.Collection.get('1544184166').setValue(Math.random() * 50);
-    }, 1500);
-  };
   gauge.draw();
 
   gauge = createGauge('Badrum', '92279315');
-  gauge.onready = function () {
-    setInterval(function () {
-      Gauge.Collection.get('92279315').setValue(Math.random() * 50);
-    }, 1500);
-  };
   gauge.draw();
 
   gauge = createGauge('Varmvatten ut', '775199740');
-  gauge.onready = function () {
-    setInterval(function () {
-      Gauge.Collection.get('775199740').setValue(Math.random() * 50);
-    }, 1500);
-  };
   gauge.draw();
 
   gauge = createGauge('Varmvatten in', '1186084518');
-  gauge.onready = function () {
-    setInterval(function () {
-      Gauge.Collection.get('1186084518').setValue(Math.random() * 50);
-    }, 1500);
-  };
   gauge.draw();
 
   var eb = new EventBus(window.location.protocol + '//' + window.location.hostname + ':' + window.location.port + '/eventbus');
   eb.onopen = function () {
     // set a handler to receive a message
-    eb.registerHandler('jel.eventbus.external.devices', function (error, message) {
-      console.log('received a message: ' + JSON.stringify(message));
+    eb.registerHandler('jel.eventbus.public', function (error, message) {
+      if (error) {
+        console.log('received an error: ' + error);
+      } else {
+        if (message && message.headers && message.headers.action) {
+          switch (message.headers.action) {
+            case 'DEVICE_NEWREADING':
+              updateGauge(message.body);
+              break;
+            default:
+              console.log('unsupported message action "' + message.headers.action + '"');
+          }
+        } else {
+          console.log('received a message without action-header. Msg: ' + JSON.stringify(message));
+        }
+      }
     });
   };
+  eb.onclose = function () {
+    console.log('connection closed!');
+  };
+
+  /**
+   *  Updated gauge with new readings.
+   * @param {Object} message
+   * @param {Object.String} message.id
+   * @param {Object.String} message.time
+   * @param {Object.String} message.value
+   * @returns {undefined}
+   */
+  function updateGauge(message) {
+    var gauge = Gauge.Collection.get(message.id);
+    // Check that gauge exists for this device before we try to set its value.
+    if (gauge) {
+      gauge.setValue(message.value);
+    }
+  }
 })();

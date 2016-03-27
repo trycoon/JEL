@@ -34,11 +34,6 @@ public final class JelService {
    * Namespace of eventbus, used by components that require to talk to JEL-system using its central eventbus.
    */
   public final static String EVENTBUS = "jel.eventbus";
-  /**
-   * Namespace of external eventbus, used by connected clients to communicate with JEL and subscribe on updates. It's similar to the internal eventbus but
-   * should not expose sensitive information.
-   */
-  public final static String EXTERNAL_EVENTBUS = "jel.eventbus.external";
 
   /**
    * Endpoint for public REST API.

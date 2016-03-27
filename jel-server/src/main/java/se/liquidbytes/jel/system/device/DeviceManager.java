@@ -86,9 +86,8 @@ public final class DeviceManager {
     Map<String, Device> devices = new ConcurrentHashMap<>();
     String adapterId = "833142300";
 
-    JsonObject hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "7F0560010800");
     Sensor sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "7F0560010800"));
     sensor.setName("Varmvatten ut");
     sensor.setDescription("Varmvatten ut(gamla värmecentral)");
     //sensor.setHardware(new DeviceHardware());
@@ -101,140 +100,118 @@ public final class DeviceManager {
     sensor.setSmallPresentation(new DevicePresentation());*/
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "000801601AAC");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "000801601AAC"));
     sensor.setName("Varmvatten tillbaka");
     sensor.setDescription("Varmvatten tillbaka(gamla värmecentral)");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "93D848010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "93D848010800"));
     sensor.setName("Förådet");
     sensor.setDescription("Förådet(i ladan)");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "7174B5010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "7174B5010800"));
     sensor.setName("Utomhus");
     sensor.setDescription("Utomhus(vid elmätaren vid ladan)");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "454849010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "454849010800"));
     sensor.setName("Pumphuset");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "9D9A98010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "9D9A98010800"));
     sensor.setName("Hönshuset");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "B74C8A010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "B74C8A010800"));
     sensor.setName("Vardagsrummet");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "C9E69E010800"); //833142300
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "C9E69E010800"));
     sensor.setName("Hall(toalett/pannrum)");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "158DB5010800"); //833142300
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "158DB5010800"));
     sensor.setName("Kök");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "AC1A60010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "AC1A60010800"));
     sensor.setName("Nya entren");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "0C92B5010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "0C92B5010800"));
     sensor.setName("Badrum");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "52A9B5010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "52A9B5010800"));
     sensor.setName("Arbetsrum");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "2A8DB5010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "2A8DB5010800"));
     sensor.setName("Leias sovrum");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "18A4B5010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "18A4B5010800"));
     sensor.setName("Hall/toalett på övervåning");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "22A9B5010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "22A9B5010800"));
     sensor.setName("Caspers sovrum");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "407F98010800");
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    sensor.setId(this.generateDeviceId(adapterId, "407F98010800"));
     sensor.setName("Vårt sovrum");
     devices.put(sensor.getId(), sensor);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "340501000000");
     Actuator actuator = new Actuator();
-    actuator.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    actuator.setId(this.generateDeviceId(adapterId, "340501000000"));
     actuator.setName("Pumphuset(vattenpumps mätare)");
-    devices.put(sensor.getId(), actuator);
+    devices.put(actuator.getId(), actuator);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "4D4D13000000_2");
     actuator = new Actuator();
-    actuator.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    actuator.setId(this.generateDeviceId(adapterId, "4D4D13000000_2"));
     actuator.setName("Hall och pannrum");
-    devices.put(sensor.getId(), actuator);
+    devices.put(actuator.getId(), actuator);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "4D4D13000000_3");
     actuator = new Actuator();
-    actuator.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    actuator.setId(this.generateDeviceId(adapterId, "4D4D13000000_3"));
     actuator.setName("Vardagsrum");
-    devices.put(sensor.getId(), actuator);
+    devices.put(actuator.getId(), actuator);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "4D4D13000000_4");
     actuator = new Actuator();
-    actuator.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    actuator.setId(this.generateDeviceId(adapterId, "4D4D13000000_4"));
     actuator.setName("Kök");
-    devices.put(sensor.getId(), actuator);
+    devices.put(actuator.getId(), actuator);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "3E4D13000000_1");
     actuator = new Actuator();
-    actuator.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    actuator.setId(this.generateDeviceId(adapterId, "3E4D13000000_1"));
     actuator.setName("Nya hallen");
-    devices.put(sensor.getId(), actuator);
+    devices.put(actuator.getId(), actuator);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "3E4D13000000_2");
     actuator = new Actuator();
-    actuator.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    actuator.setId(this.generateDeviceId(adapterId, "3E4D13000000_2"));
     actuator.setName("Badrum");
-    devices.put(sensor.getId(), actuator);
+    devices.put(actuator.getId(), actuator);
 
-    hardcodedDevice = new JsonObject().put("adapterId", adapterId).put("deviceId", "3E4D13000000_3");
     actuator = new Actuator();
-    actuator.setId(this.generateDeviceId(adapterId, hardcodedDevice.getString("deviceId")));
+    actuator.setId(this.generateDeviceId(adapterId, "3E4D13000000_3"));
     actuator.setName("Arbetsrum");
-    devices.put(sensor.getId(), actuator);
+    devices.put(actuator.getId(), actuator);
 
     siteDevices.put("1", devices);
   }
@@ -764,7 +741,8 @@ public final class DeviceManager {
           break;
         }
       }
-
+      // TODO: we should always work with our own deviceId and NOT the adapters hwId!
+      reading.put("id", deviceId);
       // TODO: update device last readings, and current value in deviceLists. possible broadcast to clients dependings on samplerate.
       JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, reading, new DeliveryOptions().addHeader("action", InternalEvents.EVENT_DEVICE_NEWREADING));
       JelService.vertx().eventBus().publish(PublicEvents.EVENTBUS_PUBLIC, reading, new DeliveryOptions().addHeader("action", PublicEvents.EVENT_DEVICE_NEWREADING));
