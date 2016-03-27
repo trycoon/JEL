@@ -33,7 +33,7 @@ public class OwServerUnhandledException extends RuntimeException {
    * @param message Message
    */
   public OwServerUnhandledException(String message) {
-    super();
+    super(message);
   }
 
   /**

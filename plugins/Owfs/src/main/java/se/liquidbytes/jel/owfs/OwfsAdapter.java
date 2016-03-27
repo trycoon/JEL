@@ -46,9 +46,7 @@ import org.owfs.jowfsclient.device.SwitchAlarmingDeviceListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.system.adapter.AbstractAdapter;
-import static se.liquidbytes.jel.system.adapter.AdapterManager.EVENTBUS_ADAPTERS;
-import se.liquidbytes.jel.system.device.DeviceManager;
-import static se.liquidbytes.jel.system.device.DeviceManager.EVENTBUS_DEVICES;
+import se.liquidbytes.jel.system.adapter.AdapterEvents;
 import se.liquidbytes.jel.system.plugin.PluginException;
 
 /**
@@ -139,15 +137,15 @@ public class OwfsAdapter extends AbstractAdapter {
     // and we may want to send a command to a specific instance, to all instances of an adapter-type, and to ALL adapters.
     EventBus eb = vertx.eventBus();
     MessageConsumer<String> consumer;
-    consumer = eb.consumer(String.format("%s.%s", EVENTBUS_ADAPTERS, "_all"));
+    consumer = eb.consumer(String.format("%s.%s", AdapterEvents.EVENTBUS_ADAPTERS, "_all"));
     consumer.handler(message -> {
       handleRequest(message);
     });
-    consumer = eb.consumer(String.format("%s.%s", EVENTBUS_ADAPTERS, "owfs"));
+    consumer = eb.consumer(String.format("%s.%s", AdapterEvents.EVENTBUS_ADAPTERS, "owfs"));
     consumer.handler(message -> {
       handleRequest(message);
     });
-    consumer = eb.consumer(String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, "owfs", this.host, this.port));
+    consumer = eb.consumer(String.format("%s.%s@%s:%d", AdapterEvents.EVENTBUS_ADAPTERS, "owfs", this.host, this.port));
     consumer.handler(message -> {
       handleRequest(message);
     });
@@ -357,7 +355,6 @@ public class OwfsAdapter extends AbstractAdapter {
 
             // For devices that supports it.
             //setupAlarmHandler(device);
-
             broadcastDevice = new JsonObject()
                 .put("adapterId", this.getId())
                 .put("port", this.port)
@@ -365,7 +362,7 @@ public class OwfsAdapter extends AbstractAdapter {
                 .put("deviceId", deviceId)
                 .put("type", deviceType)
                 .put("name", typeInfo.getString("name"));
-            eb.publish(EVENTBUS_DEVICES, broadcastDevice, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICES_ADDED));
+            eb.publish(AdapterEvents.EVENTBUS_ADAPTERS, broadcastDevice, new DeliveryOptions().addHeader("action", AdapterEvents.EVENT_DEVICES_ADDED));
 
             // Check if this device is an container for other "child-devices". In that case, add all the children too, their Id will be <parent_childnumber>.
             if (typeInfo.containsKey("childDevices")) {
@@ -388,7 +385,7 @@ public class OwfsAdapter extends AbstractAdapter {
                     .put("deviceId", childId)
                     .put("type", deviceType)
                     .put("name", childDevice.getString("name"));
-                eb.publish(EVENTBUS_DEVICES, broadcastDevice, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICES_ADDED));
+                eb.publish(AdapterEvents.EVENTBUS_ADAPTERS, broadcastDevice, new DeliveryOptions().addHeader("action", AdapterEvents.EVENT_DEVICES_ADDED));
               }
             }
           } else {
@@ -493,7 +490,7 @@ public class OwfsAdapter extends AbstractAdapter {
         .put("host", this.host)
         .put("deviceId", removeId);
 
-    eb.publish(EVENTBUS_DEVICES, broadcastDevice, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICES_REMOVED));
+    eb.publish(AdapterEvents.EVENTBUS_ADAPTERS, broadcastDevice, new DeliveryOptions().addHeader("action", AdapterEvents.EVENT_DEVICES_REMOVED));
   }
 
   /**
@@ -633,7 +630,7 @@ public class OwfsAdapter extends AbstractAdapter {
                 .put("host", this.host)
                 .put("reading", reading);
 
-            vertx.eventBus().publish(EVENTBUS_DEVICES, broadcast, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICE_NEWREADING));
+            vertx.eventBus().publish(AdapterEvents.EVENTBUS_ADAPTERS, broadcast, new DeliveryOptions().addHeader("action", AdapterEvents.EVENT_DEVICE_NEWREADING));
           } else {
             // This is a parent device so we must check which of its children  that has changed and notify each and every one of them on the bus.
             String[] childValues = value.split(",");
@@ -657,7 +654,7 @@ public class OwfsAdapter extends AbstractAdapter {
                         .put("value", childValues[i])
                     );
 
-                vertx.eventBus().publish(EVENTBUS_DEVICES, broadcast, new DeliveryOptions().addHeader("action", DeviceManager.EVENTBUS_DEVICE_NEWREADING));
+                vertx.eventBus().publish(AdapterEvents.EVENTBUS_ADAPTERS, broadcast, new DeliveryOptions().addHeader("action", AdapterEvents.EVENT_DEVICE_NEWREADING));
               }
             }
           }
@@ -938,15 +935,41 @@ public class OwfsAdapter extends AbstractAdapter {
       throw new DeviceMissingException("Trying to perform a action on a non existing device.", deviceId);
     }
 
-    JsonObject device = deviceLookup.get(deviceId);
-    JsonObject typeInfo = device.getJsonObject("typeInfo");
+    if (deviceId.contains(CHILDSEPARATOR)) {
 
-    // Check if this type of device is writable.
-    if (typeInfo.containsKey("valueWritePath")) {
-      String path = device.getString("path") + typeInfo.getString("valueWritePath");
+      String parentId = deviceId.split(CHILDSEPARATOR)[0];
+      String childSuffix = deviceId.split(CHILDSEPARATOR)[1];
+      JsonObject parentDevice = deviceLookup.get(parentId);
+      JsonObject typeInfo = parentDevice.getJsonObject("typeInfo");
 
-      // Queue command. Record time so we could measure how long command has been queued before executed, if we want to.
-      this.commandQueue.offer(new JsonObject().put("path", path).put("value", value).put("nanoTime", System.nanoTime()));
+      if (typeInfo == null) {
+        throw new OwServerConnectionException(String.format("typeInfo missing for device with type '%s'", parentDevice.getString("type")));
+      }
+
+      JsonArray childDevices = typeInfo.getJsonArray("childDevices");
+      if (childDevices != null && childDevices.size() > 0) {
+        String writePath = childDevices.stream().filter(t -> t instanceof JsonObject).map(t -> (JsonObject) t).filter((d) -> d.getString("idSuffix").equals(childSuffix)).map((cd) -> cd.getString("valueWritePath")).findFirst().get();
+        writePath = parentDevice.getString("path") + writePath;
+
+        // Queue command. Record time so we could measure how long command has been queued before executed, if we want to.
+        this.commandQueue.offer(new JsonObject().put("path", writePath).put("value", value).put("nanoTime", System.nanoTime()));
+      }
+
+    } else {
+
+      JsonObject device = deviceLookup.get(deviceId);
+      JsonObject typeInfo = device.getJsonObject("typeInfo");
+
+      if (typeInfo == null) {
+        throw new OwServerConnectionException(String.format("typeInfo missing for device with type '%s'", device.getString("type")));
+      }
+      // Check if this type of device is writable.
+      if (typeInfo.containsKey("valueWritePath")) {
+        String writePath = device.getString("path") + typeInfo.getString("valueWritePath");
+
+        // Queue command. Record time so we could measure how long command has been queued before executed, if we want to.
+        this.commandQueue.offer(new JsonObject().put("path", writePath).put("value", value).put("nanoTime", System.nanoTime()));
+      }
     }
   }
 }

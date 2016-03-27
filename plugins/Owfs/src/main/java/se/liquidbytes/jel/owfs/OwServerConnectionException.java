@@ -33,7 +33,7 @@ public class OwServerConnectionException extends RuntimeException {
    * @param message Message
    */
   public OwServerConnectionException(String message) {
-    super();
+    super(message);
   }
 
   /**
