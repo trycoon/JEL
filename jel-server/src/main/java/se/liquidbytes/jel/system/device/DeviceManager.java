@@ -101,7 +101,7 @@ public final class DeviceManager {
     devices.put(sensor.getId(), sensor);
 
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, "000801601AAC"));
+    sensor.setId(this.generateDeviceId(adapterId, "969D98010800"));
     sensor.setName("Varmvatten tillbaka");
     sensor.setDescription("Varmvatten tillbaka(gamla värmecentral)");
     devices.put(sensor.getId(), sensor);
@@ -669,72 +669,75 @@ public final class DeviceManager {
     Map<String, ? extends Device> devices = siteDevices.get("1"); //TODO: hardcoded.
     Device siteDevice = devices.get(deviceId);
 
+    int lowLimit = 22;
+    int highLimit = 24;
+
     if (siteDevice != null) {
       double temp = Double.parseDouble(reading.getString("value"));
       logger.info("Sensor: '{}' with id: {} and hwid: {}, temp: {}.", siteDevice.getName(), deviceId, reading.getString("id"), temp);
 
       switch (reading.getString("id")) {
         case "B74C8A010800": {  // Vardagsrummet
-          if (temp < 22) {
+          if (temp < lowLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_3"), "1", (r) -> {
             });
           }
-          if (temp > 23) {
+          if (temp > highLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_3"), "0", (r) -> {
             });
           }
           break;
         }
         case "C9E69E010800": {  // Hall(toalett/pannrum)"
-          if (temp < 22) {
+          if (temp < lowLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_2"), "1", (r) -> {
             });
           }
-          if (temp > 23) {
+          if (temp > highLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_2"), "0", (r) -> {
             });
           }
           break;
         }
         case "158DB5010800": {  // kök
-          if (temp < 22) {
+          if (temp < lowLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_4"), "1", (r) -> {
             });
           }
-          if (temp > 23) {
+          if (temp > highLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_4"), "0", (r) -> {
             });
           }
           break;
         }
         case "AC1A60010800": {  // Nya entren
-          if (temp < 22) {
+          if (temp < lowLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_1"), "1", (r) -> {
             });
           }
-          if (temp > 23) {
+          if (temp > highLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_1"), "0", (r) -> {
             });
           }
           break;
         }
         case "52A9B5010800": {  // Arbetsrum
-          if (temp < 22) {
+          if (temp < lowLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_3"), "1", (r) -> {
             });
           }
-          if (temp > 23) {
+          if (temp > highLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_3"), "0", (r) -> {
             });
           }
           break;
         }
         case "0C92B5010800": {  // Badrum
-          if (temp < 22) {
+          if (temp < lowLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_2"), "1", (r) -> {
             });
           }
-          if (temp > 23) {
+          if (temp > highLimit) {
             this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_2"), "0", (r) -> {
             });
           }

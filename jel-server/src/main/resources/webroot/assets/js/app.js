@@ -14,11 +14,12 @@
       minValue: 0,
       maxValue: 55,
       majorTicks: ['0', '5', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'],
-      minorTicks: 10,
+      minorTicks: 5,
       strokeTicks: false,
       highlights: [
-        {from: 0, to: 18, color: 'rgba(0,   0, 255, .3)'},
-        {from: 25, to: 55, color: 'rgba(255, 0, 0, .3)'}
+        {from: 0, to: 22, color: 'rgba(0, 0, 255, .3)'},
+        {from: 22, to: 24, color: 'rgba(0, 255, 0, .3)'},
+        {from: 24, to: 55, color: 'rgba(255, 0, 0, .3)'}
       ],
       colors: {
         plate: '#222',
@@ -90,7 +91,7 @@
   gauge = createGauge('Varmvatten ut', '775199740');
   gauge.draw();
 
-  gauge = createGauge('Varmvatten in', '1186084518');
+  gauge = createGauge('Varmvatten in', '347706997');
   gauge.draw();
 
   var eb = new EventBus(window.location.protocol + '//' + window.location.hostname + ':' + window.location.port + '/eventbus');
