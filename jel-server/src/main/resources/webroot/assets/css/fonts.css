@@ -1,0 +1,12 @@
+
+@font-face {
+    font-family: 'digital-7_monomono';
+    src: url('digital-7-mono.eot');
+    src: url('digital-7-mono.eot?#iefix') format('embedded-opentype'),
+         url('digital-7-mono.woff2') format('woff2'),
+         url('digital-7-mono.woff') format('woff'),
+         url('digital-7-mono.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+
+}

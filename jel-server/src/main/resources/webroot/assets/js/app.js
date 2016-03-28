@@ -29,15 +29,15 @@
         units: '#ccc',
         numbers: '#eee',
         needle: {
-          start: 'rgba(240, 128, 128, 1)',
-          end: 'rgba(255, 160, 122, .9)',
+          start: 'rgba(240, 128, 128, .75)',
+          end: 'rgba(255, 160, 122, .75)',
           circle: {
             outerStart: '#333',
             outerEnd: '#111',
             innerStart: '#111',
             innerEnd: '#222'
           },
-          shadowUp: false,
+          shadowUp: true,
           shadowDown: false
         },
         circle: {
