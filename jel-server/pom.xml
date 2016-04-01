@@ -140,12 +140,6 @@
       <artifactId>hazelcast</artifactId>
       <version>${hazelcast.version}</version>
     </dependency>
-    <!-- Handlebars dependencies -->	
-    <dependency>
-      <groupId>io.vertx</groupId>
-      <artifactId>vertx-web-templ-handlebars</artifactId>
-      <version>${handlebars.version}</version>
-    </dependency>
     <!-- Pi4j dependencies, Raspberry Pi support -->
     <dependency>
       <groupId>com.pi4j</groupId>

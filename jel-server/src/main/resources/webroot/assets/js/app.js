@@ -6,8 +6,8 @@
   function createGauge(name, elementId) {
     return new Gauge({
       renderTo: elementId,
-      width: 400,
-      height: 400,
+      width: 300,
+      height: 300,
       glow: false,
       units: '°C',
       title: name,
