@@ -66,7 +66,7 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private final static int POLL_PRESENCE_DELAY = 60000;
   /**
-   * Character that separates a parent id from a child id. (Must be URL compatible)
+   * Character that separates a parent hwId from a child hwId. (Must be URL compatible)
    */
   private final static String CHILDSEPARATOR = "_";
   /**
@@ -253,7 +253,7 @@ public class OwfsAdapter extends AbstractAdapter {
 
       logger.debug("Done executing action \"{}\" on Owserver with adapter id \"{}\" running at {}:{}.", action, this.getId(), this.host, this.port);
     } catch (DeviceMissingException ex) {
-      logger.info("Trying to perform an action on a non existing device ({}) on Owserver with adapter id \"{}\" running at {}:{}.", ex.getDeviceId(), this.getId(), this.host, this.port);
+      logger.info("Trying to perform an action on a non existing device ({}) on Owserver with adapter id \"{}\" running at {}:{}.", ex.getHardwareId(), this.getId(), this.host, this.port);
       message.fail(404, ex.getMessage());
     } catch (OwServerConnectionException ex) {
       logger.error("Failed to execute action \"{}\" on Owserver with adapter id \"{}\" running at {}:{}.", action, this.getId(), this.host, this.port, ex);
@@ -299,24 +299,24 @@ public class OwfsAdapter extends AbstractAdapter {
    */
   private void scanAvailableDevices() {
     try {
-      String deviceId, deviceType, deviceFamily, isPowered;
+      String hwId, deviceType, deviceFamily, isPowered;
       Set<String> foundDeviceIds = new HashSet<>();
       EventBus eb = vertx.eventBus();
       JsonObject device, childDevice, broadcastDevice;
 
       Instant startExecutionTime = Instant.now();
-      logger.debug("Scanning for available devices on Owserver at {}:{} with id \"{}\".", this.host, this.port, this.getId());
+      logger.debug("Scanning for available devices on Owserver at {}:{} with adapter id \"{}\".", this.host, this.port, this.getId());
       List<String> owDevices = owserverConnection.listDirectory(true);
       logger.debug("Found {} devices on Owserver at {}:{} with adapter id \"{}\".", owDevices.size(), this.host, this.port, this.getId());
 
       for (String owDevice : owDevices) {
-        deviceId = owserverConnection.read(owDevice + "/id");
+        hwId = owserverConnection.read(owDevice + "/id");
         deviceType = owserverConnection.read(owDevice + "/type");
         deviceFamily = owserverConnection.read(owDevice + "/family");
 
-        foundDeviceIds.add(deviceId);
+        foundDeviceIds.add(hwId);
 
-        device = deviceLookup.get(deviceId);
+        device = deviceLookup.get(hwId);
         // Device not found in existing list, this must be a newly added device. Add it to the collection and broadcast its existence.
         if (device == null) {
           if (DeviceDatabase.getDeviceTypeInfo(deviceType) != null) {
@@ -327,7 +327,7 @@ public class OwfsAdapter extends AbstractAdapter {
               for (Iterator it = typeInfo.getJsonArray("initCommands").iterator(); it.hasNext();) {
                 JsonObject command = (JsonObject) it.next();
                 String path = owDevice + command.getString("path");
-                logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{} with adapter id \"{}\".", path, command.getString("value"), deviceId, this.host, this.port, this.getId());
+                logger.debug("Running initcommand (path '{}', value '{}') for device '{}' on Owserver at {}:{} with adapter id \"{}\".", path, command.getString("value"), hwId, this.host, this.port, this.getId());
 
                 owserverConnection.write(path, command.getString("value"));
               }
@@ -336,22 +336,22 @@ public class OwfsAdapter extends AbstractAdapter {
             try {
               isPowered = owserverConnection.read(owDevice + "/power");
               if (isPowered != null && isPowered.equals("0")) {
-                logger.warn("Device '{}' of type '{}' on Owserver at {}:{} with adapter id \"{}\" is running on parasitic power, this will slow down the 1-wire network and is less reliable than a powered device.", deviceId, deviceType, this.host, this.port, this.getId());
+                logger.warn("Device '{}' of type '{}' on Owserver at {}:{} with adapter id \"{}\" is running on parasitic power, this will slow down the 1-wire network and is less reliable than a powered device.", hwId, deviceType, this.host, this.port, this.getId());
               }
             } catch (OwServerConnectionException ex) {
               // Ignore. Devices that don't support the power-property will throw an error, so we just ignore this.
             }
 
             device = new JsonObject();
-            device.put("id", deviceId);
+            device.put("hwId", hwId);
             device.put("type", deviceType);
             device.put("name", typeInfo.getString("name"));
             device.put("family", deviceFamily);
             device.put("path", owDevice);
             device.put("typeInfo", typeInfo);
 
-            deviceLookup.put(deviceId, device);
-            logger.info("New device found during scan of Owserver at {}:{} with adapter id \"{}\". Device hwid: {}, type: {}, family: {}.", this.host, this.port, this.getId(), deviceId, deviceType, deviceFamily);
+            deviceLookup.put(hwId, device);
+            logger.info("New device found during scan of Owserver at {}:{} with adapter id \"{}\". Device hwId: {}, type: {}, family: {}.", this.host, this.port, this.getId(), hwId, deviceType, deviceFamily);
 
             // For devices that supports it.
             //setupAlarmHandler(device);
@@ -359,7 +359,7 @@ public class OwfsAdapter extends AbstractAdapter {
                 .put("adapterId", this.getId())
                 .put("port", this.port)
                 .put("host", this.host)
-                .put("deviceId", deviceId)
+                .put("hwId", hwId)
                 .put("type", deviceType)
                 .put("name", typeInfo.getString("name"));
             eb.publish(AdapterEvents.EVENTBUS_ADAPTERS, broadcastDevice, new DeliveryOptions().addHeader("action", AdapterEvents.EVENT_DEVICES_ADDED));
@@ -368,28 +368,28 @@ public class OwfsAdapter extends AbstractAdapter {
             if (typeInfo.containsKey("childDevices")) {
               for (Iterator it = typeInfo.getJsonArray("childDevices").iterator(); it.hasNext();) {
                 JsonObject childType = (JsonObject) it.next();
-                String childId = String.format("%s%s%s", deviceId, CHILDSEPARATOR, childType.getString("idSuffix"));
+                String childId = String.format("%s%s%s", hwId, CHILDSEPARATOR, childType.getString("idSuffix"));
 
                 childDevice = new JsonObject();
-                childDevice.put("id", childId);
+                childDevice.put("hwId", childId);
                 childDevice.put("type", deviceType);
                 childDevice.put("name", String.format("%s-%s", typeInfo.getString("name"), childType.getString("name")));
 
                 deviceLookup.put(childId, childDevice);
-                logger.info("New childdevice for device {} found during scan of Owserver at {}:{} with adapter id \"{}\". Device hwid: {}, type: {}, family: {}.", deviceId, this.host, this.port, this.getId(), childId, deviceType, deviceFamily);
+                logger.info("New childdevice for device {} found during scan of Owserver at {}:{} with adapter id \"{}\". Device hwId: {}, type: {}, family: {}.", hwId, this.host, this.port, this.getId(), childId, deviceType, deviceFamily);
 
                 broadcastDevice = new JsonObject()
                     .put("adapterId", this.getId())
                     .put("port", this.port)
                     .put("host", this.host)
-                    .put("deviceId", childId)
+                    .put("hwId", childId)
                     .put("type", deviceType)
                     .put("name", childDevice.getString("name"));
                 eb.publish(AdapterEvents.EVENTBUS_ADAPTERS, broadcastDevice, new DeliveryOptions().addHeader("action", AdapterEvents.EVENT_DEVICES_ADDED));
               }
             }
           } else {
-            logger.info("Found unsupported devicetype for device with hwid '{}' on Owserver at {}:{} with adapter id \"{}\". Device will be ignored! Please notify developers and provide: type={}, family={}.", deviceId, this.host, this.port, this.getId(), deviceType, deviceFamily);
+            logger.info("Found unsupported devicetype for device with hwId '{}' on Owserver at {}:{} with adapter id \"{}\". Device will be ignored! Please notify developers and provide: type={}, family={}.", hwId, this.host, this.port, this.getId(), deviceType, deviceFamily);
           }
         }
       }
@@ -411,9 +411,9 @@ public class OwfsAdapter extends AbstractAdapter {
         }
       }
 
-      logger.debug("Scanning bus for devices took {}ms on Owserver at {}:{} with id \"{}\".", Duration.between(startExecutionTime, Instant.now()).toMillis(), this.host, this.port, this.getId());
+      logger.debug("Scanning bus for devices took {}ms on Owserver at {}:{} with adapter id \"{}\".", Duration.between(startExecutionTime, Instant.now()).toMillis(), this.host, this.port, this.getId());
     } catch (OwServerConnectionException ex) {
-      logger.error("Error while trying to scan Owserver at {}:{} with id \"{}\" for available devices.", this.host, this.port, this.getId(), ex);
+      logger.error("Error while trying to scan Owserver at {}:{} with adapter id \"{}\" for available devices.", this.host, this.port, this.getId(), ex);
     }
   }
 
@@ -460,7 +460,7 @@ public class OwfsAdapter extends AbstractAdapter {
    * @return List of "parent" devices.
    */
   private List<JsonObject> getParentDevicesOnly() {
-    return deviceLookup.values().stream().filter(d -> !d.getString("id").contains(CHILDSEPARATOR)).collect(Collectors.toList());
+    return deviceLookup.values().stream().filter(d -> !d.getString("hwId").contains(CHILDSEPARATOR)).collect(Collectors.toList());
   }
 
   /**
@@ -469,26 +469,26 @@ public class OwfsAdapter extends AbstractAdapter {
    * @return List of child devices.
    */
   private List<JsonObject> getChildDevicesOnly(String parentId) {
-    return deviceLookup.values().stream().filter(d -> d.getString("id").contains(parentId + CHILDSEPARATOR))
-        .sorted((d1, d2) -> d1.getString("id").compareTo(d2.getString("id")))
+    return deviceLookup.values().stream().filter(d -> d.getString("hwId").contains(parentId + CHILDSEPARATOR))
+        .sorted((d1, d2) -> d1.getString("hwId").compareTo(d2.getString("hwId")))
         .collect(Collectors.toList());
   }
 
   /**
    * Remove a device from deviceLookup. Also signal it's departure on the bus
    *
-   * @param removeId remmoved device id
+   * @param removeId remmoved device hwId
    * @param eb eventbus instance
    */
   private void removeDeviceFromLookup(String removeId, EventBus eb) {
     deviceLookup.remove(removeId);
-    logger.info("Device with id: {}, not found after last scan of Owserver at {}:{} with id \"{}\". Device has been removed from bus.", removeId, this.host, this.port, this.getId());
+    logger.info("Device with hwId: {}, not found after last scan of Owserver at {}:{} with adapter id \"{}\". Device has been removed from bus.", removeId, this.host, this.port, this.getId());
 
     JsonObject broadcastDevice = new JsonObject()
         .put("adapterId", this.getId())
         .put("port", this.port)
         .put("host", this.host)
-        .put("deviceId", removeId);
+        .put("hwId", removeId);
 
     eb.publish(AdapterEvents.EVENTBUS_ADAPTERS, broadcastDevice, new DeliveryOptions().addHeader("action", AdapterEvents.EVENT_DEVICES_REMOVED));
   }
@@ -531,7 +531,7 @@ public class OwfsAdapter extends AbstractAdapter {
    * @return Current value.
    */
   private String readValue(JsonObject device) {
-    String id = device.getString("id");
+    String hwId = device.getString("hwId");
 
     try {
 
@@ -546,9 +546,9 @@ public class OwfsAdapter extends AbstractAdapter {
 
       return value;
     } catch (DeviceMissingException ex) {
-      throw new PluginException(String.format("Failed to read value from device with id '%s', device is reported missing.", ex.getDeviceId()), ex);
+      throw new PluginException(String.format("Failed to read value from device with hwId '%s', device is reported missing.", ex.getHardwareId()), ex);
     } catch (OwServerConnectionException ex) {
-      throw new PluginException(String.format("Failed to read value from device with id '%s'.", id), ex);
+      throw new PluginException(String.format("Failed to read value from device with hwId '%s'.", hwId), ex);
     }
   }
 
@@ -580,7 +580,7 @@ public class OwfsAdapter extends AbstractAdapter {
    * @param devices List of devices to read from.
    */
   private void collectDevicesReadings(List<JsonObject> devices) {
-    String id = null;
+    String hwId = null;
     String time;
     String value;
     JsonObject reading;
@@ -590,37 +590,37 @@ public class OwfsAdapter extends AbstractAdapter {
     for (JsonObject device : devices) {
 
       try {
-        id = device.getString("id");
+        hwId = device.getString("hwId");
 
         // Do a blocking reading.
         value = readValue(device);
         time = LocalDateTime.now().toString();
-        logger.trace("Read value '{}' from device with id '{}' on Owserver at {}:{} with adapter id \"{}\".", value, id, this.host, this.port, this.getId());
+        logger.trace("Read value '{}' from device with hwId '{}' on Owserver at {}:{} with adapter id \"{}\".", value, hwId, this.host, this.port, this.getId());
 
         reading = new JsonObject()
-            .put("id", id)
+            .put("hwId", hwId)
             .put("value", value)
             .put("time", time);
 
         // Get hold of array of recorded readings for this specific device.
-        if (!deviceReadings.containsKey(id)) {
+        if (!deviceReadings.containsKey(hwId)) {
           readings = new JsonObject()
               .put("lastReading", new JsonObject()
                   .put("value", (Object) null) // Set property to prevent a possible nullpointer exception later.
               );
 
-          deviceReadings.put(id, readings);
+          deviceReadings.put(hwId, readings);
         } else {
-          readings = deviceReadings.get(id);
+          readings = deviceReadings.get(hwId);
         }
 
         String lastValue = readings.getJsonObject("lastReading").getString("value");
         // Only add this reading to list of readings for device if the value of the reading has changed since the last time we did a reading. We save a lot of space and memory by doing this!
         if (!value.equals(lastValue)) {
           readings.put("lastReading", reading);
-          logger.debug("Recorded new value '{}' at time '{}' for device with id '{}' on Owserver at {}:{} with id \"{}\".", value, time, id, this.host, this.port, this.getId());
+          logger.debug("Recorded new value '{}' at time '{}' for device with hwId '{}' on Owserver at {}:{} with adapter id \"{}\".", value, time, hwId, this.host, this.port, this.getId());
 
-          List<JsonObject> childs = getChildDevicesOnly(id);
+          List<JsonObject> childs = getChildDevicesOnly(hwId);
 
           if (childs.isEmpty()) {
             // This device has no children, so we just notify that this device has a value that has changed.
@@ -649,7 +649,7 @@ public class OwfsAdapter extends AbstractAdapter {
                     .put("port", this.port)
                     .put("host", this.host)
                     .put("reading", new JsonObject()
-                        .put("id", childs.get(i).getString("id"))
+                        .put("hwId", childs.get(i).getString("hwId"))
                         .put("time", reading.getString("time"))
                         .put("value", childValues[i])
                     );
@@ -660,7 +660,7 @@ public class OwfsAdapter extends AbstractAdapter {
           }
         }
       } catch (Exception ex) {
-        logger.error("Failed to poll device '{}' for value on Owserver at {}:{} with adapter id \"{}\".", id, this.host, this.port, this.getId());
+        logger.error("Failed to poll device '{}' for value on Owserver at {}:{} with adapter id \"{}\".", hwId, this.host, this.port, this.getId());
       }
 
       // Execute possible queued commands between each iteration. This is necessary since a reading from several parasitic devices could take many seconds to complete.
@@ -810,7 +810,7 @@ public class OwfsAdapter extends AbstractAdapter {
     for (JsonObject device : deviceList) {
       result.add(
           new JsonObject()
-          .put("id", device.getString("id"))
+          .put("hwId", device.getString("hwId"))
           .put("type", device.getString("type"))
           .put("name", device.getString("name"))
       );
@@ -820,7 +820,7 @@ public class OwfsAdapter extends AbstractAdapter {
   }
 
   /**
-   * Read value from device with specified id.
+   * Read value from device with specified hwId.
    *
    * @param message eventbus message.
    * @throws DeviceMissingException throws exception if specified device does not exist.
@@ -833,32 +833,32 @@ public class OwfsAdapter extends AbstractAdapter {
     }
 
     JsonObject params = (JsonObject) message.body();
-    String deviceId = params.getString("deviceId");
+    String hwId = params.getString("hwId");
 
-    if (deviceId == null || deviceId.isEmpty()) {
-      message.fail(400, "Missing parameter 'deviceId'.");
+    if (hwId == null || hwId.isEmpty()) {
+      message.fail(400, "Missing parameter 'hwId'.");
       return;
     }
 
-    message.reply(this.constructReply(this.getDeviceValue(deviceId)));
+    message.reply(this.constructReply(this.getDeviceValue(hwId)));
   }
 
   /**
-   * Read value from device with specified id.
+   * Read value from device with specified hwId.
    *
-   * @param deviceId Id on device
+   * @param hwId Id on device
    * @return device last recorded value.
    * @throws DeviceMissingException throws exception if specified device does not exist.
    */
-  private JsonObject getDeviceValue(String deviceId) throws DeviceMissingException {
+  private JsonObject getDeviceValue(String hwId) throws DeviceMissingException {
 
-    if (deviceId == null || !deviceLookup.containsKey(deviceId)) {
-      throw new DeviceMissingException("Trying to perform a action on a non existing device.", deviceId);
+    if (hwId == null || !deviceLookup.containsKey(hwId)) {
+      throw new DeviceMissingException("Trying to perform a action on a non existing device.", hwId);
     }
 
     // Check if child device.
-    if (!deviceId.contains(CHILDSEPARATOR)) {
-      JsonObject reading = this.deviceReadings.get(deviceId);
+    if (!hwId.contains(CHILDSEPARATOR)) {
+      JsonObject reading = this.deviceReadings.get(hwId);
 
       JsonObject response = new JsonObject()
           .put("reading", reading);
@@ -867,7 +867,7 @@ public class OwfsAdapter extends AbstractAdapter {
     } else {
 
       JsonObject response;
-      JsonObject reading = this.deviceReadings.get(deviceId.split(CHILDSEPARATOR)[0]); // Get value from parent.
+      JsonObject reading = this.deviceReadings.get(hwId.split(CHILDSEPARATOR)[0]); // Get value from parent.
 
       if (reading == null) {
 
@@ -875,13 +875,13 @@ public class OwfsAdapter extends AbstractAdapter {
 
       } else {
 
-        int index = Integer.parseInt(deviceId.split(CHILDSEPARATOR)[1]) - 1;         // Get child idsuffix.
+        int index = Integer.parseInt(hwId.split(CHILDSEPARATOR)[1]) - 1;         // Get child idsuffix.
 
         String value = reading.getJsonObject("lastReading").getString("value").split(",")[index];  // Get child reading from parent reading.
 
         response = new JsonObject()
             .put("reading", new JsonObject()
-                .put("id", deviceId)
+                .put("hwId", hwId)
                 .put("time", reading.getJsonObject("lastReading").getString("time"))
                 .put("value", value)
             );
@@ -892,7 +892,7 @@ public class OwfsAdapter extends AbstractAdapter {
   }
 
   /**
-   * Set value on device with specified id.
+   * Set value on device with specified hwId.
    *
    * @param message eventbus message.
    * @throws DeviceMissingException throws exception if specified device does not exist.
@@ -906,11 +906,11 @@ public class OwfsAdapter extends AbstractAdapter {
     }
 
     JsonObject params = (JsonObject) message.body();
-    String deviceId = params.getString("deviceId");
+    String hwId = params.getString("hwId");
     String value = params.getString("value");
 
-    if (deviceId == null || deviceId.isEmpty()) {
-      message.fail(400, "Missing parameter 'deviceId'.");
+    if (hwId == null || hwId.isEmpty()) {
+      message.fail(400, "Missing parameter 'hwId'.");
       return;
     }
     if (value == null || value.isEmpty()) {
@@ -918,27 +918,27 @@ public class OwfsAdapter extends AbstractAdapter {
       return;
     }
 
-    this.setDeviceValue(deviceId, value);
+    this.setDeviceValue(hwId, value);
   }
 
   /**
-   * Set value on device with specified id.
+   * Set value on device with specified hwId.
    *
-   * @param deviceId Id on device
+   * @param hwId Id on device
    * @param value value to set on device.
    * @throws DeviceMissingException throws exception if specified device does not exist.
    * @throws OwServerConnectionException throws exception if command fails for any reason.
    */
-  private void setDeviceValue(String deviceId, String value) throws DeviceMissingException, OwServerConnectionException {
+  private void setDeviceValue(String hwId, String value) throws DeviceMissingException, OwServerConnectionException {
 
-    if (deviceId == null || !deviceLookup.containsKey(deviceId)) {
-      throw new DeviceMissingException("Trying to perform a action on a non existing device.", deviceId);
+    if (hwId == null || !deviceLookup.containsKey(hwId)) {
+      throw new DeviceMissingException("Trying to perform a action on a non existing device.", hwId);
     }
 
-    if (deviceId.contains(CHILDSEPARATOR)) {
+    if (hwId.contains(CHILDSEPARATOR)) {
 
-      String parentId = deviceId.split(CHILDSEPARATOR)[0];
-      String childSuffix = deviceId.split(CHILDSEPARATOR)[1];
+      String parentId = hwId.split(CHILDSEPARATOR)[0];
+      String childSuffix = hwId.split(CHILDSEPARATOR)[1];
       JsonObject parentDevice = deviceLookup.get(parentId);
       JsonObject typeInfo = parentDevice.getJsonObject("typeInfo");
 
@@ -957,7 +957,7 @@ public class OwfsAdapter extends AbstractAdapter {
 
     } else {
 
-      JsonObject device = deviceLookup.get(deviceId);
+      JsonObject device = deviceLookup.get(hwId);
       JsonObject typeInfo = device.getJsonObject("typeInfo");
 
       if (typeInfo == null) {

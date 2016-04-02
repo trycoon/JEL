@@ -23,7 +23,7 @@ public class DeviceMissingException extends RuntimeException {
   /**
    * Requested device id
    */
-  private String deviceId;
+  private String hwId;
 
   /**
    * Default constructor for exception class
@@ -36,11 +36,11 @@ public class DeviceMissingException extends RuntimeException {
    * Constructor for exception class
    *
    * @param message Message
-   * @param deviceId Device id
+   * @param hwId Device id
    */
-  public DeviceMissingException(String message, String deviceId) {
+  public DeviceMissingException(String message, String hwId) {
     super(message);
-    this.deviceId = deviceId;
+    this.hwId = hwId;
   }
 
   /**
@@ -63,20 +63,20 @@ public class DeviceMissingException extends RuntimeException {
   }
 
   /**
-   * Set device id.
+   * Set device hardware id.
    *
-   * @param deviceId
+   * @param hwId
    */
-  public void setDeviceId(String deviceId) {
-    this.deviceId = deviceId;
+  public void setHardwareId(String hwId) {
+    this.hwId = hwId;
   }
 
   /**
-   * Get device id.
+   * Get device hardware id.
    *
-   * @return device id
+   * @return device hardware id
    */
-  public String getDeviceId() {
-    return this.deviceId;
+  public String getHardwareId() {
+    return this.hwId;
   }
 }
