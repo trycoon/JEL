@@ -125,7 +125,7 @@ public class DeviceApi {
       context.fail(400);
       return;
     }
-    // As device id is unique we don't really need adapter id.
+    // As device id is unique we don't really need adapter id, we use it only to get a semantic route.
     service.retrieveAdapterDevice(deviceId, (r) -> {
       if (r.succeeded()) {
         JsonObject device = r.result();

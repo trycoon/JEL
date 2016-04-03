@@ -457,7 +457,20 @@ public final class DeviceManager {
         String.format("%s.%s@%s:%d", AdapterEvents.EVENTBUS_ADAPTERS, adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort()),
         new JsonObject().put("hwId", device.getString("hwId")), options, res -> {
       if (res.succeeded()) {
-        JsonObject result = (JsonObject) res.result().body();
+        JsonObject reading = ((JsonObject) res.result().body()).getJsonObject("result").getJsonObject("reading");
+
+        String time = null, value = null;
+
+        if (reading != null) {
+          time = reading.getJsonObject("lastReading").getString("time");
+          value = reading.getJsonObject("lastReading").getString("value");
+        }
+
+        JsonObject result = new JsonObject()
+            .put("deviceId", device.getString("deviceId"))
+            .put("time", time)
+            .put("value", value);
+
         resultHandler.handle(Future.succeededFuture(result));
       } else {
         resultHandler.handle(Future.failedFuture(res.cause()));
