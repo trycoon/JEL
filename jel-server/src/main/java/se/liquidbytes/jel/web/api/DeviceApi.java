@@ -90,7 +90,7 @@ public class DeviceApi {
 
         deviceList.forEach(d -> {
           JsonObject device = (JsonObject) d;
-          device.put("currentValue", String.format("%s/adapters/%s/devices/%s/value", API_ENDPOINT, adapterId, device.getString("id")));
+          device.put("currentValue", String.format("%s/adapters/%s/devices/%s/value", API_ENDPOINT, adapterId, device.getString("deviceId")));
         });
         context.response().end(deviceList.encodePrettily());
       } else {
@@ -125,10 +125,10 @@ public class DeviceApi {
       context.fail(400);
       return;
     }
-// As device id is unique we don't really need adapter id.
+    // As device id is unique we don't really need adapter id.
     service.retrieveAdapterDevice(deviceId, (r) -> {
       if (r.succeeded()) {
-        JsonObject device = (JsonObject) r.result();
+        JsonObject device = r.result();
         device.put("currentValue", String.format("%s/adapters/%s/devices/%s/value", API_ENDPOINT, adapterId, deviceId));
         context.response().end(device.encodePrettily());
       } else {

@@ -48,7 +48,7 @@ public final class DeviceManager {
   private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   /**
-   * Referense to eventbus subscription for device-events, just so that we could unsubscibe when shutting down.
+   * Referense to eventbus subscription for result-events, just so that we could unsubscibe when shutting down.
    */
   private MessageConsumer deviceEventConsumer;
 
@@ -58,13 +58,13 @@ public final class DeviceManager {
   private MessageConsumer adapterEventConsumer;
 
   /**
-   * Collection of all devices bound to a site and unbound. Key is device id.
+   * Collection of all devices bound to a site and unbound. Key is result id.
    */
   private final Map<String, JsonObject> allDevices;
 
   /**
    * Collection of all devices not yet bound to a site. When they are "unbound" they have no settings available and no history of past readings are saved. Key
-   * is device id.
+   * is result id.
    */
   private final Map<String, JsonObject> unboundDevices;
 
@@ -217,7 +217,7 @@ public final class DeviceManager {
   }
 
   /**
-   * Method for starting device manager, should be called upon application startup.
+   * Method for starting result manager, should be called upon application startup.
    */
   public void start() {
 
@@ -228,7 +228,7 @@ public final class DeviceManager {
   }
 
   /**
-   * Method for stopping device manager, should be called upon application shutdown.
+   * Method for stopping result manager, should be called upon application shutdown.
    */
   public void stop() {
     logger.info("Shutting down devicemanager.");
@@ -247,7 +247,7 @@ public final class DeviceManager {
   }
 
   public void createAdapterDevice(String adapterId, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    throw new UnsupportedOperationException("Not supported yet.");
   }
 
   public void listAdapterDevices(String adapterId, Handler<AsyncResult<JsonArray>> resultHandler) {
@@ -268,7 +268,25 @@ public final class DeviceManager {
               JsonArray devices = new JsonArray();
 
               JsonObject result = (JsonObject) res.result().body();
-              devices.addAll(result.getJsonArray("result"));
+              result.getJsonArray("result").forEach((d) -> {
+                JsonObject tmpDevice = (JsonObject) d;
+
+                // Sync found devices with allDevices-collection in case we are out of sync and have missed an event!
+                addToDeviceCollections(
+                    new JsonObject()
+                    .put("adapterId", adapterId)
+                    .put("name", tmpDevice.getString("name"))
+                    .put("type", tmpDevice.getString("type"))
+                    .put("hwId", tmpDevice.getString("hwId"))
+                );
+
+                devices.add(
+                    new JsonObject()
+                    .put("deviceId", generateDeviceId(adapterId, tmpDevice.getString("hwId")))
+                    .put("type", tmpDevice.getString("type"))
+                    .put("name", tmpDevice.getString("name"))
+                );
+              });
 
               resultHandler.handle(Future.succeededFuture(devices));
             } else {
@@ -279,15 +297,15 @@ public final class DeviceManager {
   }
 
   public void retrieveAdapterDevice(String id, Handler<AsyncResult<JsonObject>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    resultHandler.handle(Future.failedFuture(new UnsupportedOperationException("Not supported yet.")));
   }
 
   public void updateAdapterDevice(String id, JsonObject device, Handler<AsyncResult<JsonObject>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    resultHandler.handle(Future.failedFuture(new UnsupportedOperationException("Not supported yet.")));
   }
 
   public void deleteAdapterDevice(String id, Handler<AsyncResult<Void>> resultHandler) {
-    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    resultHandler.handle(Future.failedFuture(new UnsupportedOperationException("Not supported yet.")));
   }
 
   /**
@@ -340,17 +358,22 @@ public final class DeviceManager {
               String.format("%s.%s@%s:%d", AdapterEvents.EVENTBUS_ADAPTERS, _item.config().getType(), _item.config().getAddress(), _item.config().getPort()),
               null, options, res -> {
                 if (res.succeeded()) {
-                  // All adapters fills in turn a json-array named "devices".
-                  JsonArray devices = context.getJsonArray("devices");
+                  // All adapters fills in turn a json-array named "adapterDevices".
+                  JsonArray adapterDevices = context.getJsonArray("adapterDevices");
+
                   // If we are the first adapter to report back, create the array.
-                  if (devices == null) {
-                    devices = new JsonArray();
+                  if (adapterDevices == null) {
+                    adapterDevices = new JsonArray();
                   }
 
                   JsonObject result = (JsonObject) res.result().body();
-                  devices.addAll(result.getJsonArray("result"));
 
-                  context.put("devices", devices);
+                  adapterDevices.add(new JsonObject()
+                      .put("adapterId", result.getString("adapterId"))
+                      .put("devices", new JsonArray().addAll(result.getJsonArray("result")))
+                  );
+
+                  context.put("adapterDevices", adapterDevices);
                   onResult.accept(true);
                 } else {
                   context.put("errorMessage", res.cause().toString());
@@ -362,7 +385,34 @@ public final class DeviceManager {
 
       promise.done((onSuccess) -> {
         // When we are done, all adapters devices should be here.
-        JsonArray devices = onSuccess.getJsonArray("devices");
+        JsonArray adapterDevices = onSuccess.getJsonArray("adapterDevices");
+        JsonArray devices = new JsonArray();
+
+        adapterDevices.forEach((adl) -> {
+
+          JsonObject adapterDeviceList = (JsonObject) adl;
+          String adapterId = adapterDeviceList.getString("adapterId");
+
+          adapterDeviceList.getJsonArray("devices").forEach((ad) -> {
+            JsonObject tmpDevice = (JsonObject) ad;
+
+            devices.add(
+                new JsonObject()
+                .put("deviceId", generateDeviceId(adapterId, tmpDevice.getString("hwId")))
+                .put("type", tmpDevice.getString("type"))
+                .put("name", tmpDevice.getString("name"))
+            );
+
+            // Sync found devices with allDevices-collection in case we are out of sync and have missed an event!
+            addToDeviceCollections(
+                new JsonObject()
+                .put("adapterId", adapterId)
+                .put("name", tmpDevice.getString("name"))
+                .put("type", tmpDevice.getString("type"))
+                .put("hwId", tmpDevice.getString("hwId"))
+            );
+          });
+        });
 
         resultHandler.handle(Future.succeededFuture(devices));
       }).except((onError) -> {
@@ -376,39 +426,49 @@ public final class DeviceManager {
   }
 
   /**
-   * Retrieve the current value of an device using specified device id.
+   * Retrieve the current value of an result using specified result id.
    *
-   * @param deviceId id of existing device.
+   * @param deviceId id of existing result.
    * @param resultHandler
    */
   public void retrieveDeviceValue(String deviceId, Handler<AsyncResult<JsonObject>> resultHandler) {
     DeliveryOptions options = new DeliveryOptions();
     options.addHeader("action", "retrieveDeviceValue");
-    /*    DeployedAdapter adapter = JelService.adapterManager().getAdapter(adapterId);
+
+    JsonObject device = allDevices.get(deviceId);
+    if (device == null) {
+      resultHandler.handle(Future.failedFuture(
+          String.format("Device with id %s does not exist.", deviceId))
+      );
+      return;
+    }
+
+    DeployedAdapter adapter = JelService.adapterManager().getAdapter(device.getString("adapterId"));
 
     if (adapter == null) {
       resultHandler.handle(Future.failedFuture(
-          String.format("Adapter with id %s does not exist.", adapterId))
+          String.format("Adapter with id %s does not exist.", device.getString("adapterId")))
       );
-    } else {
-      // Send message to adapter to report back its devices.
-      JelService.vertx().eventBus().send(
-          String.format("%s.%s@%s:%d", EVENTBUS_ADAPTERS, adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort()),
-          new JsonObject().put("deviceId", deviceId), options, res -> {
-        if (res.succeeded()) {
-          JsonObject result = (JsonObject) res.result().body();
-          resultHandler.handle(Future.succeededFuture(result));
-        } else {
-          resultHandler.handle(Future.failedFuture(res.cause()));
-        }
-      });
-    }*/
+      return;
+    }
+
+    // Send message to adapter to report back its devices.
+    JelService.vertx().eventBus().send(
+        String.format("%s.%s@%s:%d", AdapterEvents.EVENTBUS_ADAPTERS, adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort()),
+        new JsonObject().put("hwId", device.getString("hwId")), options, res -> {
+      if (res.succeeded()) {
+        JsonObject result = (JsonObject) res.result().body();
+        resultHandler.handle(Future.succeededFuture(result));
+      } else {
+        resultHandler.handle(Future.failedFuture(res.cause()));
+      }
+    });
   }
 
   /**
-   * Update the value of an existing device using specified id and value.
+   * Update the value of an existing result using specified id and value.
    *
-   * @param deviceId id of existing device.
+   * @param deviceId id of existing result.
    * @param value value to set.
    * @param resultHandler
    */
@@ -429,8 +489,10 @@ public final class DeviceManager {
         );
       } else {
         JsonObject data = new JsonObject()
-            .put("deviceId", device.getString("deviceId"))
+            .put("hwId", device.getString("hwId"))
             .put("value", value);
+
+        logger.info("Setting new value('{}') on device with id: {} and hwId: {}.", value, device.getString("deviceId"), device.getString("hwId"));
 
         JelService.vertx().eventBus().send(
             String.format("%s.%s@%s:%d", AdapterEvents.EVENTBUS_ADAPTERS, adapter.config().getType(), adapter.config().getAddress(), adapter.config().getPort()),
@@ -442,38 +504,36 @@ public final class DeviceManager {
   }
 
   /**
-   * Start subscribe on device-events triggered by adapters.
+   * Start subscribe on result-events triggered by adapters.
    */
   private void subscribeOnDeviceEvents() {
     deviceEventConsumer = JelService.vertx().eventBus().consumer(AdapterEvents.EVENTBUS_ADAPTERS, (r) -> {
       String action = r.headers().get("action");
 
       if (action != null) {
-        JsonObject device;
+        JsonObject result;
 
         switch (action) {
           case AdapterEvents.EVENT_DEVICES_ADDED:
-            device = (JsonObject) r.body();
+            result = (JsonObject) r.body();
             JsonObject newDevice = new JsonObject()
-                .put("host", device.getString("host"))
-                .put("port", device.getInteger("port"))
-                .put("adapterId", device.getString("adapterId"))
-                .put("name", device.getString("name"))
-                .put("type", device.getString("type"))
-                .put("deviceId", device.getString("deviceId"));
+                .put("adapterId", result.getString("adapterId"))
+                .put("name", result.getString("name"))
+                .put("type", result.getString("type"))
+                .put("hwId", result.getString("hwId"));
 
             addToDeviceCollections(newDevice);
             break;
           case AdapterEvents.EVENT_DEVICES_REMOVED:
-            device = (JsonObject) r.body();
+            result = (JsonObject) r.body();
 
-            removeDeviceFromCollections(device);
+            removeDeviceFromCollections(result);
             break;
 
           case AdapterEvents.EVENT_DEVICE_NEWREADING:
-            device = (JsonObject) r.body();
+            result = (JsonObject) r.body();
 
-            handleNewDeviceReading(device);
+            handleNewDeviceReading(result);
             break;
         }
 
@@ -495,24 +555,14 @@ public final class DeviceManager {
             // For newly added adapter, scan for all its connected devices. But first give it some time to settle down and find all devices.
             JelService.vertx().setTimer(3500, (Void) -> {
               this.listAdapterDevices(adapter.getString("id"), (deviceList) -> {
-                deviceList.result().stream().forEachOrdered((d) -> {
-                  JsonObject device = (JsonObject) d;
-                  JsonObject newDevice = new JsonObject()
-                      .put("host", adapter.getJsonObject("config").getString("address"))
-                      .put("port", adapter.getJsonObject("config").getInteger("port"))
-                      .put("adapterId", adapter.getString("id"))
-                      .put("name", device.getString("name"))
-                      .put("type", device.getString("type"))
-                      .put("deviceId", device.getString("id"));
-                  addToDeviceCollections(newDevice);
-                });
+                // Do nothing here. This execution will trigger the population of devices within listAdapterDevices.
               });
             });
             break;
           }
           case InternalEvents.EVENT_ADAPTER_STOPPED: {
             JsonObject adapter = (JsonObject) r.body();
-            // For removed adapter, update device collections to reflect the changes.
+            // For removed adapter, update result collections to reflect the changes.
             removeAdapterDevicesFromCollections(adapter.getString("id"));
             break;
           }
@@ -522,29 +572,13 @@ public final class DeviceManager {
   }
 
   /**
-   * Validate a device JSON-object.
+   * Validate a result JSON-object.
    *
    * @param device JSON-object o validate.
    * @return result.
    */
   private boolean validateDeviceObject(JsonObject device) {
     if (device == null) {
-      return false;
-    }
-    try {
-      String host = device.getString("host");
-      if (host == null || host.length() == 0) {
-        return false;
-      }
-    } catch (Exception ex) {
-      return false;
-    }
-    try {
-      int port = device.getInteger("port");
-      if (port < 1) {
-        return false;
-      }
-    } catch (Exception ex) {
       return false;
     }
     try {
@@ -573,8 +607,8 @@ public final class DeviceManager {
     }
 
     try {
-      String deviceId = device.getString("deviceId");
-      if (deviceId == null || deviceId.length() == 0) {
+      String hwId = device.getString("hwId");
+      if (hwId == null || hwId.length() == 0) {
         return false;
       }
     } catch (Exception ex) {
@@ -585,15 +619,17 @@ public final class DeviceManager {
   }
 
   /**
-   * Add a new device to all device collections and broadcast events. Use this method instead of modifying the allDevices-collections by yourself!
+   * Add a new result to all result collections and broadcast events. Use this method instead of modifying the allDevices-collections by yourself!
    *
-   * @param device JSON-object containing: host, port, adapterId, name, type, deviceId.
+   * @param device JSON-object containing: adapterId, name, type, hwId.
    */
   private void addToDeviceCollections(JsonObject device) {
     // Makde sure we don't add junk that will crash us later.
     if (validateDeviceObject(device)) {
-      String deviceId = this.generateDeviceId(device.getString("adapterId"), device.getString("deviceId"));
-      // This method may be called upon serveral times with the same device, make sure we only add it once!
+      String deviceId = this.generateDeviceId(device.getString("adapterId"), device.getString("hwId"));
+      device.put("deviceId", deviceId); // Make sure this is set, and with a correct value.
+
+      // This method may be called upon serveral times with the same result, make sure we only add it once!
       if (!this.allDevices.containsKey(deviceId)) {
         this.allDevices.put(deviceId, device);
       }
@@ -612,18 +648,29 @@ public final class DeviceManager {
       if (siteDevice == null) {
         if (!this.unboundDevices.containsKey(deviceId)) {
           this.unboundDevices.put(deviceId, device);
-          JsonObject broadcast = new JsonObject(); //TODO: implement!
+          JsonObject broadcast = new JsonObject()
+              .put("adapterId", device.getString("adapterId"))
+              .put("name", device.getString("name"))
+              .put("type", device.getString("type"))
+              .put("deviceId", device.getString("deviceId"));
+
           JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, broadcast, new DeliveryOptions().addHeader("action", InternalEvents.EVENT_DEVICES_ADDED));
           JelService.vertx().eventBus().publish(PublicEvents.EVENTBUS_PUBLIC, broadcast, new DeliveryOptions().addHeader("action", PublicEvents.EVENT_DEVICES_ADDED));
-
         }
-      } else {
+      } else if (!siteDevice.isPresent()) {
+        // If not already present, set as present and broadcast change.
         siteDevice.isPresent(true);
 
-        JsonObject broadcast = new JsonObject(); //TODO: implement!
+        JsonObject broadcast = new JsonObject()
+            .put("adapterId", device.getString("adapterId"))
+            .put("name", device.getString("name"))
+            .put("type", device.getString("type"))
+            .put("deviceId", device.getString("deviceId"));
         JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, broadcast, new DeliveryOptions().addHeader("action", InternalEvents.EVENT_DEVICE_PRESENT));
         JelService.vertx().eventBus().publish(PublicEvents.EVENTBUS_PUBLIC, broadcast, new DeliveryOptions().addHeader("action", PublicEvents.EVENT_DEVICE_PRESENT));
       }
+    } else {
+      logger.debug("Device failed validation, skipping adding device to collection.");
     }
   }
 
@@ -634,24 +681,24 @@ public final class DeviceManager {
    */
   private void removeAdapterDevicesFromCollections(String adapterId) {
 
-    //TODO: if in sitelist, set device as not present and broadcast that to clients.
+    //TODO: if in sitelist, set result as not present and broadcast that to clients.
   }
 
   /**
-   * Remove specified device from collections.
+   * Remove specified result from collections.
    *
-   * @param device JSON-object containing: host, port, adapterId, name, type, deviceId.
+   * @param device JSON-object containing: adapterId, name, type, hwId.
    */
   private void removeDeviceFromCollections(JsonObject device) {
 
-    //TODO: if in sitelist, set device as not present and broadcast that to clients.
+    //TODO: if in sitelist, set result as not present and broadcast that to clients.
   }
 
   /**
-   * Generate a unique device id from adapter and device settings.
+   * Generate a unique result id from adapter and result settings.
    *
    * @param adapterId adapter id.
-   * @param deviceId device id.
+   * @param deviceId result id.
    * @return
    */
   private String generateDeviceId(String adapterId, String deviceId) {
@@ -659,13 +706,13 @@ public final class DeviceManager {
   }
 
   /**
-   * Method takes action on a new device reading.
+   * Method takes action on a new result reading.
    *
    * @param deviceReading
    */
-  private void handleNewDeviceReading(JsonObject device) {
-    JsonObject reading = device.getJsonObject("reading");
-    String deviceId = this.generateDeviceId(device.getString("adapterId"), reading.getString("id"));
+  private void handleNewDeviceReading(JsonObject deviceReading) {
+    JsonObject reading = deviceReading.getJsonObject("reading");
+    String deviceId = this.generateDeviceId(deviceReading.getString("adapterId"), reading.getString("hwId"));
     Map<String, ? extends Device> devices = siteDevices.get("1"); //TODO: hardcoded.
     Device siteDevice = devices.get(deviceId);
 
@@ -674,82 +721,86 @@ public final class DeviceManager {
 
     if (siteDevice != null) {
       double temp = Double.parseDouble(reading.getString("value"));
-      logger.info("Sensor: '{}' with id: {} and hwid: {}, temp: {}.", siteDevice.getName(), deviceId, reading.getString("id"), temp);
+      logger.info("Sensor: '{}' with id: {} and hwid: {}, temp: {}.", siteDevice.getName(), deviceId, reading.getString("hwId"), temp);
 
-      switch (reading.getString("id")) {
+      switch (reading.getString("hwId")) {
         case "B74C8A010800": {  // Vardagsrummet
           if (temp < lowLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_3"), "1", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "4D4D13000000_3"), "1", (r) -> {
             });
           }
           if (temp > highLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_3"), "0", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "4D4D13000000_3"), "0", (r) -> {
             });
           }
           break;
         }
         case "C9E69E010800": {  // Hall(toalett/pannrum)"
           if (temp < lowLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_2"), "1", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "4D4D13000000_2"), "1", (r) -> {
             });
           }
           if (temp > highLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_2"), "0", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "4D4D13000000_2"), "0", (r) -> {
             });
           }
           break;
         }
         case "158DB5010800": {  // kök
           if (temp < lowLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_4"), "1", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "4D4D13000000_4"), "1", (r) -> {
             });
           }
           if (temp > highLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "4D4D13000000_4"), "0", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "4D4D13000000_4"), "0", (r) -> {
             });
           }
           break;
         }
         case "AC1A60010800": {  // Nya entren
           if (temp < lowLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_1"), "1", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "3E4D13000000_1"), "1", (r) -> {
             });
           }
           if (temp > highLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_1"), "0", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "3E4D13000000_1"), "0", (r) -> {
             });
           }
           break;
         }
         case "52A9B5010800": {  // Arbetsrum
           if (temp < lowLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_3"), "1", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "3E4D13000000_3"), "1", (r) -> {
             });
           }
           if (temp > highLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_3"), "0", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "3E4D13000000_3"), "0", (r) -> {
             });
           }
           break;
         }
         case "0C92B5010800": {  // Badrum
           if (temp < lowLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_2"), "1", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "3E4D13000000_2"), "1", (r) -> {
             });
           }
           if (temp > highLimit) {
-            this.updateDeviceValue(this.generateDeviceId(device.getString("adapterId"), "3E4D13000000_2"), "0", (r) -> {
+            this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "3E4D13000000_2"), "0", (r) -> {
             });
           }
           break;
         }
       }
-      // TODO: we should always work with our own deviceId and NOT the adapters hwId!
-      reading.put("id", deviceId);
-      // TODO: update device last readings, and current value in deviceLists. possible broadcast to clients dependings on samplerate.
-      JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, reading, new DeliveryOptions().addHeader("action", InternalEvents.EVENT_DEVICE_NEWREADING));
-      JelService.vertx().eventBus().publish(PublicEvents.EVENTBUS_PUBLIC, reading, new DeliveryOptions().addHeader("action", PublicEvents.EVENT_DEVICE_NEWREADING));
 
+      // TODO: update result last readings, and current value in deviceLists. possible broadcast to clients dependings on samplerate.
+      JsonObject newReading = new JsonObject()
+          .put("adapterId", deviceReading.getString("adapterId"))
+          .put("deviceId", reading.getInteger("deviceId"))
+          .put("time", reading.getString("time"))
+          .put("value", reading.getString("value"));
+
+      JelService.vertx().eventBus().publish(InternalEvents.EVENTBUS_INTERNAL, newReading, new DeliveryOptions().addHeader("action", InternalEvents.EVENT_DEVICE_NEWREADING));
+      JelService.vertx().eventBus().publish(PublicEvents.EVENTBUS_PUBLIC, newReading, new DeliveryOptions().addHeader("action", PublicEvents.EVENT_DEVICE_NEWREADING));
     }
   }
 }
