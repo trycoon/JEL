@@ -101,7 +101,7 @@ public final class DeviceManager {
     devices.put(sensor.getId(), sensor);
 
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, "969D98010800"));
+    sensor.setId(this.generateDeviceId(adapterId, "AC1A60010800"));
     sensor.setName("Varmvatten tillbaka");
     sensor.setDescription("Varmvatten tillbaka(gamla värmecentral)");
     devices.put(sensor.getId(), sensor);
@@ -144,17 +144,17 @@ public final class DeviceManager {
     devices.put(sensor.getId(), sensor);
 
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, "AC1A60010800"));
+    sensor.setId(this.generateDeviceId(adapterId, "52A9B5010800"));
     sensor.setName("Nya entren");
     devices.put(sensor.getId(), sensor);
 
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, "0C92B5010800"));
+    sensor.setId(this.generateDeviceId(adapterId, "969D98010800"));
     sensor.setName("Badrum");
     devices.put(sensor.getId(), sensor);
 
     sensor = new Sensor();
-    sensor.setId(this.generateDeviceId(adapterId, "52A9B5010800"));
+    sensor.setId(this.generateDeviceId(adapterId, "0C92B5010800"));
     sensor.setName("Arbetsrum");
     devices.put(sensor.getId(), sensor);
 
@@ -770,7 +770,7 @@ public final class DeviceManager {
           }
           break;
         }
-        case "AC1A60010800": {  // Nya entren
+        case "52A9B5010800": {  // Nya entren
           if (temp < lowLimit) {
             this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "3E4D13000000_1"), "1", (r) -> {
             });
@@ -781,7 +781,7 @@ public final class DeviceManager {
           }
           break;
         }
-        case "52A9B5010800": {  // Arbetsrum
+        case "0C92B5010800": {  // Arbetsrum
           if (temp < lowLimit) {
             this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "3E4D13000000_3"), "1", (r) -> {
             });
@@ -792,7 +792,7 @@ public final class DeviceManager {
           }
           break;
         }
-        case "0C92B5010800": {  // Badrum
+        case "969D98010800": {  // Badrum
           if (temp < lowLimit) {
             this.updateDeviceValue(this.generateDeviceId(deviceReading.getString("adapterId"), "3E4D13000000_2"), "1", (r) -> {
             });
@@ -808,7 +808,7 @@ public final class DeviceManager {
       // TODO: update result last readings, and current value in deviceLists. possible broadcast to clients dependings on samplerate.
       JsonObject newReading = new JsonObject()
           .put("adapterId", deviceReading.getString("adapterId"))
-          .put("deviceId", reading.getInteger("deviceId"))
+          .put("deviceId", deviceId)
           .put("time", reading.getString("time"))
           .put("value", reading.getString("value"));
 

@@ -2,7 +2,8 @@
 
 (function () {
   'use strict';
-  
+  var eb;
+
   function createGauge(name, elementId) {
     return new Gauge({
       renderTo: elementId,
@@ -70,54 +71,36 @@
     });
   }
 
-  var gauge = createGauge('Kök', '1446390193');
-  gauge.draw();
-
-  gauge = createGauge('Vardagsrum', '157310299');
-  gauge.draw();
-
-  gauge = createGauge('Hall/pannrum', '666657313');
-  gauge.draw();
-
-  gauge = createGauge('Arbetsrum', '302851082');
-  gauge.draw();
-
-  gauge = createGauge('Entré', '1544184166');
-  gauge.draw();
-
-  gauge = createGauge('Badrum', '92279315');
-  gauge.draw();
-
-  gauge = createGauge('Varmvatten ut', '775199740');
-  gauge.draw();
-
-  gauge = createGauge('Varmvatten in', '347706997');
-  gauge.draw();
-
-  var eb = new EventBus(window.location.protocol + '//' + window.location.hostname + ':' + window.location.port + '/eventbus');
-  eb.onopen = function () {
-    // set a handler to receive a message
-    eb.registerHandler('jel.eventbus.public', function (error, message) {
-      if (error) {
-        console.log('received an error: ' + error);
-      } else {
-        if (message && message.headers && message.headers.action) {
-          switch (message.headers.action) {
-            case 'DEVICE_NEWREADING':
-              updateGauge(message.body);
-              break;
-            default:
-              console.log('unsupported message action "' + message.headers.action + '"');
-          }
+  function setupConnection() {
+    //TODO: fix leaking handler!
+    eb = new EventBus(window.location.protocol + '//' + window.location.hostname + ':' + window.location.port + '/eventbus');
+    console.log('connected.');
+    
+    eb.onopen = function () {
+      // set a handler to receive a message
+      eb.registerHandler('jel.eventbus.public', function (error, message) {
+        if (error) {
+          console.log('received an error: ' + error);
         } else {
-          console.log('received a message without action-header. Msg: ' + JSON.stringify(message));
+          if (message && message.headers && message.headers.action) {
+            switch (message.headers.action) {
+              case 'DEVICE_NEWREADING':
+                updateGauge(message.body);
+                break;
+              default:
+                console.log('unsupported message action "' + message.headers.action + '"');
+            }
+          } else {
+            console.log('received a message without action-header. Msg: ' + JSON.stringify(message));
+          }
         }
-      }
-    });
-  };
-  eb.onclose = function () {
-    console.log('connection closed!');
-  };
+      });
+    };
+    eb.onclose = function () {
+      console.log('connection closed!');
+      setTimeout(setupConnection, 2000);
+    };
+  }
 
   /**
    *  Updated gauge with new readings.
@@ -128,10 +111,37 @@
    * @returns {undefined}
    */
   function updateGauge(message) {
-    var gauge = Gauge.Collection.get(message.id);
+    var gauge = Gauge.Collection.get(message.deviceId);
     // Check that gauge exists for this device before we try to set its value.
     if (gauge) {
       gauge.setValue(message.value);
     }
   }
+    
+
+  var gauge = createGauge('Varmvatten ut', '775199740');
+  gauge.draw();
+
+  gauge = createGauge('Varmvatten in', '1544184166');
+  gauge.draw();
+  
+  gauge = createGauge('Vardagsrum', '157310299');
+  gauge.draw();
+  
+  gauge = createGauge('Hall/pannrum', '666657313');
+  gauge.draw();
+  
+  gauge = createGauge('Kök', '1446390193');
+  gauge.draw();
+
+  gauge = createGauge('Entré', '302851082');
+  gauge.draw();
+  
+  gauge = createGauge('Arbetsrum', '92279315');
+  gauge.draw();
+
+  gauge = createGauge('Badrum', '347706997');
+  gauge.draw();
+  
+  setupConnection();
 })();
