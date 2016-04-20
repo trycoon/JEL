@@ -15,13 +15,14 @@
  */
 package se.liquidbytes.jel.web;
 
+import com.theoryinpractise.halbuilder.api.Representation;
+import com.theoryinpractise.halbuilder.api.RepresentationFactory;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
-import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -39,6 +40,7 @@ import io.vertx.ext.web.handler.sockjs.SockJSHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.sstore.SessionStore;
 import java.lang.invoke.MethodHandles;
+import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.liquidbytes.jel.Settings;
@@ -205,8 +207,6 @@ public class WebserverVerticle extends AbstractVerticle {
     if (Settings.get("skipweb").equals("false")) {
       // Static resources, must be placed after API-router to not catch API calls also.
       staticHandler(router);
-      // TODO: implement this project structure on the clientside: http://vertx.io/blog/vert-x3-real-time-web-apps/
-      // TODO: Use this as a template on the clientside: https://github.com/vert-x3/vertx-examples/blob/master/metrics-examples/src/main/java/io/vertx/example/metrics/dashboard/webroot/vertx-eventbus.js
     }
 
     // No matcher - MUST be last in router chain
@@ -225,7 +225,7 @@ public class WebserverVerticle extends AbstractVerticle {
    */
   private Router staticHandler(Router router) {
     StaticHandler staticHandler = StaticHandler.create().setWebRoot("webroot");
-    staticHandler.setCachingEnabled(!Settings.isDebug()).setMaxAgeSeconds(3600 * 24 * 180); // 180 days caching, disabled when running in debug/development-mode.
+    staticHandler.setCachingEnabled(!Settings.isDebug()).setMaxAgeSeconds(3600 * 24 * 80); // 80 days caching, disabled when running in debug/development-mode.
 
     router.route("/*").handler(staticHandler);
 
@@ -238,49 +238,67 @@ public class WebserverVerticle extends AbstractVerticle {
    * @return Router with added handler.
    */
   private Router apiRouter() {
+
     //TODO: Add CORS support using a --cors argument to JEL. https://github.com/vert-x3/vertx-examples/blob/master/web-examples/src/main/java/io/vertx/example/web/cors/Server.java
     Router router = Router.router(vertx);
 
-    router.route().consumes("application/json");
-    router.route().produces("application/json");
+    // Handle bodies, limit body sizes, and handle file uploads. Max 5 MiB upload limit
+    router.route().handler(BodyHandler.create().setBodyLimit(1024 * 5000));
 
-    //router.route().consumes("application/xml");
-    //router.route().produces("application/xml");
-    router.route().handler(BodyHandler.create().setBodyLimit(1024 * 5000)); // Max 5 MiB upload limit
-    router.route().handler((RoutingContext con) -> {
-      con.response().putHeader("content-type", "application/json");
+    router.route().handler(con -> {
+
+      con.response().setChunked(true);
+      setNoCacheHeaders(con);
+
+      String contenType = con.request().headers().get("Content-Type");
+      if (contenType == null || contenType.isEmpty()) {
+        // Set default if no content-type specified.
+        contenType = RepresentationFactory.HAL_JSON;
+      }
+
+      switch (contenType.trim().toLowerCase()) {
+        case "application/json":
+        case RepresentationFactory.HAL_JSON:
+          contenType = RepresentationFactory.HAL_JSON;
+          break;
+        case "application/xml":
+        case RepresentationFactory.HAL_XML:
+          contenType = RepresentationFactory.HAL_XML;
+          break;
+        default:
+          // End request if we could not handle requested type.
+          con.response().setStatusCode(406).end("Unknown Content-Type.");
+          return;
+      }
+
+      con.response().putHeader("content-type", contenType + "; charset=utf-8");
+      con.put("__content-type", contenType);
       con.next();
     });
 
     // Root API help
-    router.get("/").handler((RoutingContext con) -> {
-      JsonObject result = new JsonObject()
-          .put("resources",
-              new JsonArray()
-              .add(API_ENDPOINT + "/system")
-              .add(API_ENDPOINT + "/plugins")
-              .add(API_ENDPOINT + "/repoplugins")
-              .add(API_ENDPOINT + "/adaptertypes")
-              .add(API_ENDPOINT + "/adapters")
-              .add(API_ENDPOINT + "/users")
-              .add(API_ENDPOINT + "/sites"));
+    router.get("/").handler(con -> {
+      Representation rep = PresentationFactory.getRepresentation(API_ENDPOINT)
+          .withLink("system", API_ENDPOINT + "/system")
+          .withLink("plugins", API_ENDPOINT + "/plugins")
+          .withLink("repoplugins", API_ENDPOINT + "/repoplugins")
+          .withLink("adaptertypes", API_ENDPOINT + "/adaptertypes")
+          .withLink("adapters", API_ENDPOINT + "/adapters")
+          .withLink("users", API_ENDPOINT + "/users")
+          .withLink("sites", API_ENDPOINT + "/sites");
 
-      con.response().end(result.encodePrettily());
+      con.response().end(rep.toString(con.get("__content-type")));
     });
-
     // System-api
     router.get("/system/info").handler(systemApi::systemInformation);
     router.get("/system/resources").handler(systemApi::systemResources);
 
-    router.get("/system").handler((RoutingContext con) -> {
-      JsonObject result = new JsonObject()
-          .put("resources",
-              new JsonArray()
-              .add(API_ENDPOINT + "/system/info")
-              .add(API_ENDPOINT + "/system/resources")
-          );
+    router.get("/system").handler(con -> {
+      Representation rep = PresentationFactory.getRepresentation(API_ENDPOINT + "/system")
+          .withLink("info", API_ENDPOINT + "/system/info")
+          .withLink("resources", API_ENDPOINT + "/system/resources");
 
-      con.response().end(result.encodePrettily());
+      con.response().end(rep.toString(con.get("__content-type")));
     });
 
     // Plugin-api
@@ -332,7 +350,7 @@ public class WebserverVerticle extends AbstractVerticle {
   }
 
   /**
-   * Set up Eventbus and specify which namespaces are allowed for inbound and outbound communication.
+   * Set up Eventbus and specify which namespace are allowed for inbound and outbound communication.
    *
    * @return SockJSHandler instance.
    */
@@ -354,5 +372,20 @@ public class WebserverVerticle extends AbstractVerticle {
 
       event.complete(true);
     });
+  }
+
+  /**
+   * Set no cache headers on response
+   *
+   * @param con context.
+   */
+  private void setNoCacheHeaders(RoutingContext con) {
+    if (!con.response().headWritten()) {
+      // Make sure we don't cache stuff we don't want to, this can be overridden later for responses that should be cached.
+      con.response()
+          .putHeader("Cache-Control", "private, no-cache, no-store, must-revalidate")
+          .putHeader("Pragma", "no-cache")
+          .putHeader("Expires", LocalDateTime.parse("2010-01-10T13:37:00").toString());
+    }
   }
 }

@@ -15,6 +15,7 @@
  */
 package se.liquidbytes.jel.web.api;
 
+import com.theoryinpractise.halbuilder.api.Representation;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonArray;
@@ -23,6 +24,7 @@ import io.vertx.ext.web.RoutingContext;
 import se.liquidbytes.jel.Settings;
 import static se.liquidbytes.jel.system.JelService.API_ENDPOINT;
 import se.liquidbytes.jel.system.JelServiceProxy;
+import se.liquidbytes.jel.web.PresentationFactory;
 
 /**
  *
@@ -46,12 +48,15 @@ public class DeviceApi {
   public void listAllDevices(RoutingContext context) {
     service.listAllDevices((r) -> {
       if (r.succeeded()) {
+        Representation rep = PresentationFactory.getRepresentation(API_ENDPOINT + "/adapters/devices");
+        http://katharsis.io/start
         JsonArray deviceList = r.result();
 
-        /*deviceList.forEach(d -> {
+        r.result().forEach(d -> {
           JsonObject device = (JsonObject) d;
-          device.put("currentValue", String.format("%s/adapters/%s/devices/%s/value", API_ENDPOINT, adapterId, device.getString("id")));
-        });*/
+            device.put("currentValue", String.format("%s/adapters/%s/devices/%s/value", API_ENDPOINT, device.getString("adapterId"), device.getString("deviceId")));
+        });
+
         context.response().end(deviceList.encodePrettily());
       } else {
         context.fail(r.cause());

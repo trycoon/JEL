@@ -275,7 +275,7 @@ public class SystemInfo {
       raspberry.put("osFirmwareDate", getRaspberryOsFirmwareDate());
       raspberry.put("revision", getRaspberryRevision());
       raspberry.put("serial", getRaspberrySerial());
-      hardware.put("raspberry", raspberry);
+      hardware.put("details", raspberry);
     }
 
     return info;

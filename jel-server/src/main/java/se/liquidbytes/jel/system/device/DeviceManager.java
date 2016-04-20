@@ -398,6 +398,7 @@ public final class DeviceManager {
 
             devices.add(
                 new JsonObject()
+                .put("adapterId", adapterId)
                 .put("deviceId", generateDeviceId(adapterId, tmpDevice.getString("hwId")))
                 .put("type", tmpDevice.getString("type"))
                 .put("name", tmpDevice.getString("name"))
@@ -407,9 +408,9 @@ public final class DeviceManager {
             addToDeviceCollections(
                 new JsonObject()
                 .put("adapterId", adapterId)
-                .put("name", tmpDevice.getString("name"))
-                .put("type", tmpDevice.getString("type"))
                 .put("hwId", tmpDevice.getString("hwId"))
+                .put("type", tmpDevice.getString("type"))
+                .put("name", tmpDevice.getString("name"))
             );
           });
         });

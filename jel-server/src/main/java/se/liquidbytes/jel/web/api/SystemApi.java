@@ -15,10 +15,14 @@
  */
 package se.liquidbytes.jel.web.api;
 
+import com.theoryinpractise.halbuilder.api.Representation;
 import io.vertx.core.Vertx;
+import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import se.liquidbytes.jel.Settings;
+import static se.liquidbytes.jel.system.JelService.API_ENDPOINT;
 import se.liquidbytes.jel.system.JelServiceProxy;
+import se.liquidbytes.jel.web.PresentationFactory;
 
 /**
  *
@@ -42,7 +46,37 @@ public class SystemApi {
   public void systemInformation(RoutingContext context) {
     service.systemInformation((r) -> {
       if (r.succeeded()) {
-        context.response().end(r.result().encodePrettily());
+        JsonObject source = r.result();
+        Representation rep = PresentationFactory.getRepresentation(API_ENDPOINT + "/system/info")
+            .withProperty("applicationVersion", source.getString("applicationVersion"))
+            .withProperty("applicationStarttime", source.getString("applicationStarttime"))
+            .withProperty("serverCurrenttime", source.getString("serverCurrenttime"))
+            .withProperty("applicationBuildnumber", source.getString("applicationBuildnumber"))
+            .withRepresentation("java", PresentationFactory.getRepresentation()
+                .withProperty("virtualMachine", source.getJsonObject("java").getString("virtualMachine"))
+                .withProperty("runtime", source.getJsonObject("java").getString("runtime"))
+                .withProperty("version", source.getJsonObject("java").getString("version"))
+                .withProperty("vendor", source.getJsonObject("java").getString("vendor"))
+                .withProperty("specificationName", source.getJsonObject("java").getString("specificationName"))
+                .withProperty("javaHome", source.getJsonObject("java").getString("javaHome"))
+            )
+            .withRepresentation("os", PresentationFactory.getRepresentation()
+                .withProperty("name", source.getJsonObject("os").getString("name"))
+                .withProperty("description", source.getJsonObject("os").getString("description"))
+                .withProperty("version", source.getJsonObject("os").getString("version"))
+                .withProperty("architecture", source.getJsonObject("os").getString("architecture"))
+            )
+            .withRepresentation("hardware", PresentationFactory.getRepresentation()
+                .withProperty("availableCPUs", source.getJsonObject("hardware").getInteger("availableCPUs"))
+                .withProperty("ipAddress", source.getJsonObject("hardware").getString("ipAddress"))
+                .withProperty("gatewayAddress", source.getJsonObject("hardware").getString("gatewayAddress"))
+                .withProperty("serverEndpoint", source.getJsonObject("hardware").getString("serverEndpoint"))
+                .withProperty("bogoMIPS", source.getJsonObject("hardware").getString("bogoMIPS"))
+                .withProperty("details", source.getJsonObject("hardware").getJsonObject("details"))
+            );
+
+        context.response().end(rep.toString(context.get("__content-type")));
+
       } else {
         context.fail(r.cause());
       }
@@ -52,7 +86,25 @@ public class SystemApi {
   public void systemResources(RoutingContext context) {
     service.systemResources((r) -> {
       if (r.succeeded()) {
-        context.response().end(r.result().encodePrettily());
+        JsonObject source = r.result();
+        Representation rep = PresentationFactory.getRepresentation(API_ENDPOINT + "/system/resources")
+            .withRepresentation("cpu", PresentationFactory.getRepresentation()
+                .withProperty("temperature", source.getJsonObject("cpu").getFloat("temperature"))
+                .withProperty("loadAverage", source.getJsonObject("cpu").getFloat("loadAverage"))
+            )
+            .withRepresentation("disk", PresentationFactory.getRepresentation()
+                .withProperty("fullness", source.getJsonObject("disk").getFloat("fullness"))
+            )
+            .withRepresentation("java", PresentationFactory.getRepresentation()
+                .withProperty("freeMemory", source.getJsonObject("java").getLong("freeMemory"))
+                .withProperty("totalMemory", source.getJsonObject("java").getLong("totalMemory"))
+            )
+            .withRepresentation("memory", PresentationFactory.getRepresentation()
+                .withProperty("free", source.getJsonObject("memory").getLong("free"))
+                .withProperty("total", source.getJsonObject("memory").getLong("total"))
+            );
+
+        context.response().end(rep.toString(context.get("__content-type")));
       } else {
         context.fail(r.cause());
       }
